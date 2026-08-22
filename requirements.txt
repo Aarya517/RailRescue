@@ -1,0 +1,6 @@
+simpy>=4.1.1
+networkx>=3.2.1
+ortools>=9.9.3963
+pydantic>=2.6.0
+numpy>=1.26.0
+rich>=13.7.0
