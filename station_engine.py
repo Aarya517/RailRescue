@@ -460,33 +460,78 @@ STATION_DB: Dict[str, Dict] = {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TRAIN POOL FOR SIMULATED BOARD GENERATION
+# AUTHENTIC REAL-WORLD TRAIN SCHEDULES PER STATION
 # ─────────────────────────────────────────────────────────────────────────────
+STATION_TRAIN_SCHEDULES: Dict[str, List[Dict]] = {
+    "GWL": [
+        {"no": "12002", "name": "Bhopal Shatabdi Express",      "tier": 2, "mps": 150, "mass": 450,  "pax": 1100},
+        {"no": "22470", "name": "Khajuraho Vande Bharat Exp",   "tier": 2, "mps": 160, "mass": 430,  "pax": 1128},
+        {"no": "12280", "name": "Taj Express Superfast",        "tier": 4, "mps": 110, "mass": 820,  "pax": 1700},
+        {"no": "12616", "name": "Grand Trunk (GT) Express",     "tier": 4, "mps": 110, "mass": 850,  "pax": 1800},
+        {"no": "12618", "name": "Mangala Lakshadweep Exp",      "tier": 4, "mps": 110, "mass": 860,  "pax": 1850},
+        {"no": "12920", "name": "Malwa SF Express",             "tier": 4, "mps": 110, "mass": 840,  "pax": 1750},
+        {"no": "12138", "name": "Punjab Mail",                  "tier": 5, "mps": 100, "mass": 800,  "pax": 1600},
+        {"no": "11842", "name": "Gita Jayanti Express",         "tier": 5, "mps": 100, "mass": 780,  "pax": 1500},
+        {"no": "11124", "name": "Gwalior - Barauni Mail",       "tier": 5, "mps": 100, "mass": 760,  "pax": 1400},
+        {"no": "41502", "name": "NCR Container Freight Rake",   "tier": 7, "mps": 75,  "mass": 3800, "pax": 0},
+    ],
+    "NDLS": [
+        {"no": "12301", "name": "Howrah Rajdhani Express",      "tier": 2, "mps": 130, "mass": 520,  "pax": 1200},
+        {"no": "12952", "name": "Mumbai Rajdhani Express",      "tier": 2, "mps": 130, "mass": 520,  "pax": 1200},
+        {"no": "22439", "name": "Varanasi Vande Bharat Exp",    "tier": 2, "mps": 160, "mass": 430,  "pax": 1128},
+        {"no": "12004", "name": "Lucknow Shatabdi Express",     "tier": 2, "mps": 150, "mass": 450,  "pax": 1100},
+        {"no": "12002", "name": "Bhopal Shatabdi Express",      "tier": 2, "mps": 150, "mass": 450,  "pax": 1100},
+        {"no": "12418", "name": "Prayagraj Express",            "tier": 4, "mps": 110, "mass": 850,  "pax": 1800},
+        {"no": "14311", "name": "Ala Hazrat / Bareilly Exp",    "tier": 5, "mps": 100, "mass": 780,  "pax": 1500},
+        {"no": "12430", "name": "Lucknow AC Superfast",         "tier": 4, "mps": 110, "mass": 820,  "pax": 1600},
+    ],
+    "CNB": [
+        {"no": "22436", "name": "Vande Bharat Express",         "tier": 2, "mps": 160, "mass": 430,  "pax": 1128},
+        {"no": "12418", "name": "Prayagraj Express",            "tier": 4, "mps": 110, "mass": 850,  "pax": 1800},
+        {"no": "12419", "name": "Gomti Express Superfast",      "tier": 4, "mps": 110, "mass": 800,  "pax": 1700},
+        {"no": "12302", "name": "Kolkata Rajdhani Express",     "tier": 2, "mps": 130, "mass": 520,  "pax": 1200},
+        {"no": "12802", "name": "Purushottam Express",          "tier": 4, "mps": 110, "mass": 850,  "pax": 1800},
+        {"no": "40106", "name": "DFC Freight Container Rake",   "tier": 7, "mps": 75,  "mass": 4200, "pax": 0},
+    ],
+    "JBP": [
+        {"no": "20174", "name": "Vande Bharat Express (Rewa)",  "tier": 2, "mps": 160, "mass": 430,  "pax": 1128},
+        {"no": "12192", "name": "Shridham Superfast Express",   "tier": 4, "mps": 110, "mass": 850,  "pax": 1800},
+        {"no": "12062", "name": "Jabalpur Janshatabdi Exp",     "tier": 4, "mps": 110, "mass": 800,  "pax": 1650},
+        {"no": "12189", "name": "Mahakaushal Express",          "tier": 5, "mps": 100, "mass": 780,  "pax": 1500},
+        {"no": "12294", "name": "Duronto Express (LTT-ALD)",    "tier": 2, "mps": 130, "mass": 520,  "pax": 1200},
+    ],
+    "MAS": [
+        {"no": "20643", "name": "Coimbatore Vande Bharat Exp",  "tier": 2, "mps": 160, "mass": 430,  "pax": 1128},
+        {"no": "12622", "name": "Tamil Nadu Express",           "tier": 4, "mps": 110, "mass": 850,  "pax": 1800},
+        {"no": "12626", "name": "Kerala Express",               "tier": 4, "mps": 110, "mass": 850,  "pax": 1800},
+        {"no": "12007", "name": "Mysuru Shatabdi Express",      "tier": 2, "mps": 150, "mass": 450,  "pax": 1100},
+        {"no": "12616", "name": "Grand Trunk (GT) Express",     "tier": 4, "mps": 110, "mass": 850,  "pax": 1800},
+    ],
+    "HWH": [
+        {"no": "12301", "name": "Howrah Rajdhani Express",      "tier": 2, "mps": 130, "mass": 520,  "pax": 1200},
+        {"no": "22301", "name": "NJP Vande Bharat Express",     "tier": 2, "mps": 160, "mass": 430,  "pax": 1128},
+        {"no": "12860", "name": "Gitanjali Express",            "tier": 4, "mps": 110, "mass": 850,  "pax": 1800},
+        {"no": "12840", "name": "Howrah Mail",                  "tier": 4, "mps": 110, "mass": 850,  "pax": 1800},
+        {"no": "12019", "name": "Ranchi Shatabdi Express",      "tier": 2, "mps": 150, "mass": 450,  "pax": 1100},
+    ],
+}
+
+# Generic fallback pool for unlisted stations
 TRAIN_POOL = [
     {"no": "12952", "name": "Mumbai Rajdhani Exp",  "tier": 2, "mps": 130, "mass": 520,  "pax": 1200},
     {"no": "12301", "name": "Howrah Rajdhani Exp",  "tier": 2, "mps": 130, "mass": 520,  "pax": 1200},
     {"no": "22691", "name": "Rajdhani Express",     "tier": 2, "mps": 130, "mass": 520,  "pax": 1200},
     {"no": "12430", "name": "Rajdhani Express",     "tier": 2, "mps": 130, "mass": 520,  "pax": 1200},
     {"no": "22439", "name": "Vande Bharat Express", "tier": 2, "mps": 160, "mass": 430,  "pax": 1128},
-    {"no": "20901", "name": "Vande Bharat Express", "tier": 2, "mps": 160, "mass": 430,  "pax": 1128},
     {"no": "12001", "name": "Bhopal Shatabdi Exp",  "tier": 2, "mps": 150, "mass": 450,  "pax": 1100},
-    {"no": "12648", "name": "Kongu Express",        "tier": 2, "mps": 130, "mass": 520,  "pax": 1200},
+    {"no": "12616", "name": "Grand Trunk (GT) Exp", "tier": 4, "mps": 110, "mass": 850,  "pax": 1800},
     {"no": "12627", "name": "Karnataka Express",    "tier": 4, "mps": 110, "mass": 850,  "pax": 1800},
-    {"no": "11301", "name": "Udaypath Express SF",  "tier": 4, "mps": 110, "mass": 780,  "pax": 1600},
-    {"no": "12195", "name": "Ajmer Superfast Exp",  "tier": 4, "mps": 110, "mass": 850,  "pax": 1800},
     {"no": "12419", "name": "Gomti Express SF",     "tier": 4, "mps": 110, "mass": 800,  "pax": 1700},
-    {"no": "12036", "name": "Avadh Assam Express",  "tier": 4, "mps": 110, "mass": 820,  "pax": 1750},
-    {"no": "14311", "name": "Bareilly Express",     "tier": 5, "mps": 100, "mass": 780,  "pax": 1500},
-    {"no": "12910", "name": "Garib Rath Express",   "tier": 5, "mps": 100, "mass": 760,  "pax": 1400},
-    {"no": "16504", "name": "Kannur Express",       "tier": 5, "mps": 100, "mass": 780,  "pax": 1500},
     {"no": "12138", "name": "Punjab Mail",          "tier": 5, "mps": 100, "mass": 800,  "pax": 1600},
-    {"no": "11057", "name": "Devagiri Express",     "tier": 5, "mps": 100, "mass": 780,  "pax": 1400},
-    {"no": "14309", "name": "Ujjaini Express",      "tier": 5, "mps": 100, "mass": 760,  "pax": 1350},
-    {"no": "12909", "name": "Bandra Garib Rath",    "tier": 5, "mps": 100, "mass": 760,  "pax": 1400},
+    {"no": "14311", "name": "Bareilly Express",     "tier": 5, "mps": 100, "mass": 780,  "pax": 1500},
     {"no": "41502", "name": "BOXN Goods Train",     "tier": 7, "mps": 75,  "mass": 3800, "pax": 0},
-    {"no": "40106", "name": "Container Freight",    "tier": 7, "mps": 75,  "mass": 4200, "pax": 0},
-    {"no": "42218", "name": "Bulk Cement BCNHL",    "tier": 7, "mps": 60,  "mass": 3600, "pax": 0},
 ]
+
 
 DIR_TO_CORRIDOR = {
     "N": "NORTH_CORRIDOR", "S": "SOUTH_CORRIDOR",
@@ -597,12 +642,13 @@ def _parse_api_response(raw_list: List[Dict], station: Dict, station_code: str) 
 
 
 def _generate_simulated_board(station_code: str, station: Dict) -> List[Dict]:
-    """Realistic simulated station board — no API key needed."""
+    """Realistic simulated station board using authentic station-specific train schedules."""
     corridors = list(station["corridors"].items())
     trains = []
     now = datetime.now()
     used: set = set()
-    pool = [dict(t) for t in TRAIN_POOL]
+    code_up = station_code.upper()
+    pool = [dict(t) for t in STATION_TRAIN_SCHEDULES.get(code_up, TRAIN_POOL)]
     random.shuffle(pool)
 
     def pick():
@@ -611,27 +657,32 @@ def _generate_simulated_board(station_code: str, station: Dict) -> List[Dict]:
                 used.add(t["no"])
                 pool.remove(t)
                 return t
+        # Fallback to generic pool if station pool exhausted
+        for t in TRAIN_POOL:
+            if t["no"] not in used:
+                used.add(t["no"])
+                return dict(t)
         return None
 
     for dir_key, corridor_info in corridors:
         base_km  = corridor_info["block_dist_km"]
-        n_trains = 2 if base_km < 10 else random.randint(2, 3)
+        n_trains = 2 if base_km < 12 else random.randint(2, 3)
+        # Generate safe, non-overlapping staggered distances (at least 4.5 km headway gap per line)
         for i in range(n_trains):
             tmpl = pick()
             if not tmpl:
                 continue
-            dist_km    = round(max(2.5, min(35.0, base_km * random.uniform(0.25 + i * 0.4, 0.6 + i * 0.5))), 2)
-            # Running at 60-88% of MPS so they are slightly delayed
-            speed_pct  = random.uniform(0.60, 0.88)
-            speed_kmh  = round(tmpl["mps"] * speed_pct, 1)
-            dist_m     = dist_km * 1000.0
-            # Scheduled = time to arrive at FULL MPS (ideal timetable)
-            ideal_sec  = dist_m / max(float(tmpl["mps"]) / 3.6, 1.0)
-            sched_sec  = max(ideal_sec, 60.0)
-            # Actual predicted arrival at current speed (always >= sched_sec → naturally delayed)
-            pred_sec   = dist_m / max(speed_kmh / 3.6, 1.0)
-            delay_min  = max(0, round((pred_sec - sched_sec) / 60.0, 1))
-            sched_dt   = now + timedelta(seconds=sched_sec)
+            # Base separation: Train 0 at 4-7km, Train 1 at 12-16km, Train 2 at 22-28km
+            headway_base = 4.0 + (i * 7.5) + random.uniform(0.5, 3.0)
+            dist_km      = round(max(3.5, min(40.0, headway_base)), 2)
+            speed_pct    = random.uniform(0.70, 0.92)
+            speed_kmh    = round(tmpl["mps"] * speed_pct, 1)
+            dist_m       = dist_km * 1000.0
+            ideal_sec    = dist_m / max(float(tmpl["mps"]) / 3.6, 1.0)
+            sched_sec    = max(ideal_sec, 60.0)
+            pred_sec     = dist_m / max(speed_kmh / 3.6, 1.0)
+            delay_min    = max(0, round((pred_sec - sched_sec) / 60.0, 1))
+            sched_dt     = now + timedelta(seconds=sched_sec)
             pf_num     = (len(trains) % station["platforms"]) + 1
             trains.append({
                 "id": tmpl["no"], "name": tmpl["name"], "tier": tmpl["tier"],

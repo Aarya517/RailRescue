@@ -5,6 +5,7 @@ Features:
   - Multi-Station Ingestion (RailRadar API + 50 Major Stations)
   - Kavach TCAS Spatiotemporal Conflict Engine with 1-Click Auto-Dispatch Resolution
   - Zero-Delay Dynamic Speed Optimization & Priority Precedence
+  - Crystal-Clear Live Autonomous Directives & Output Cards
   - Driver Machine Interface (DMI / In-Cab Loco Pilot HUD)
   - 4 Demo Preset Scenarios for Live Hackathon Presentations
   - Live ROI Metrics (Delay Saved, Energy Conserved, Outer Signal Idling Averted)
@@ -64,7 +65,6 @@ class AIDispatcher:
     @staticmethod
     def get_strategy(station_name: str, train_data: List[Dict], disruption: str) -> str:
         if not GEMINI_API_KEY:
-            # High quality realistic rule-based fallback dispatch for hackathon
             return (
                 f"[COA ADSS Dispatch Directive] Emergency diversion ordered at {station_name} throat interlocking. "
                 f"Traction section isolated. Diverting high-priority passenger rakes to Main Loop PF 2/3. "
@@ -88,7 +88,7 @@ class AIDispatcher:
             resp = client.models.generate_content(model="gemini-2.5-flash", contents=context)
             return resp.text.strip()
         except Exception as e:
-            return f"AI Dispatch: Section caution order issued. Emergency speed limit 30 km/h applied."
+            return "AI Dispatch: Section caution order issued. Emergency speed limit 30 km/h applied."
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -106,7 +106,6 @@ class SimulationSession:
         self.disruption_active = False
         self.disruption_text   = "None (Nominal)"
         self.logs: List[str]   = []
-        # Hackathon Impact Metrics
         self.delay_recovered_min = 14.5
         self.energy_saved_kwh    = 840.0
         self.outer_waits_averted = 24.0
@@ -149,7 +148,7 @@ class SimulationSession:
             "tier":         int(data.get("tier", 5)),
             "corridor":     data.get("corridor", "NORTH_CORRIDOR"),
             "corridor_dir": data.get("corridor_dir", "N"),
-            "route_type":   data.get("route_type", "Inbound"),
+            "route_type":   data.get("route_type", "Inbound Approach"),
             "best_route":   data.get("best_route", "Approach -> PF 1"),
             "dist":         dist_m,
             "dist_remaining": dist_m,
@@ -182,6 +181,9 @@ class SimulationSession:
             "priority_rank":  99,
             "predicted_arrival_str": data.get("scheduled_arrival_str", "--:--"),
             "dynamic_eta":    data.get("scheduled_arrival_str", "--:--"),
+            "cmd_title":      f"MAINTAIN {float(data.get('current_speed', 80.0)):.0f} KM/H",
+            "cmd_detail":     "Maintain section speed. Timetable on track.",
+            "crossing":       "Authorized for direct platform entry.",
             "gps":            Kinematics.compute_gps(
                                   data.get("corridor", "NORTH_CORRIDOR"),
                                   dist_m,
@@ -204,42 +206,57 @@ class SimulationSession:
         self.step(dt=0.0)
 
     def resolve_conflicts_auto(self):
-        """1-Click ADSS Action: Enforce speed advisories and restore Kavach headway."""
+        """1-Click ADSS Action: Enforce speed advisories, reroute to loop lines, and restore safe Kavach headway."""
         if not self.alerts:
-            return {"success": True, "message": "No active conflicts in section."}
+            return {"success": True, "message": "All trains operating in nominal safe state."}
 
         for a in self.alerts:
             trail_id = a.get("trail_id")
             lead_id  = a.get("lead_id")
             for t in self.trains:
                 if t["id"] == trail_id:
-                    # Enforce safe speed
-                    rec = a.get("recommended_action", {}).get(trail_id, "")
-                    t["current_speed"]  = max(20.0, float(t.get("advised_speed", 45.0)))
+                    # Enforce immediate safety deceleration and divert to loop line
+                    t["current_speed"]  = 35.0
+                    t["required_speed"] = 35.0
+                    t["advised_speed"]  = 35.0
+                    t["dist_remaining"] += 3500.0  # Buffer separation established
+                    t["dist"] = max(t["dist"], t["dist_remaining"])
+                    t["allocated_pf"]   = 3  # Divert to loop line Platform 3
+                    t["risk_status"]    = "NOMINAL_CLEAR"
+                    t["risk_score"]     = 0.0
+                    t["collision_advice"] = None
+                    t["action_text"]    = "Loop Line Divert Active — 35 km/h glide enforced"
+                    t["cmd_title"]      = "GLIDE AT 35 KM/H (LOOP DIVERT)"
+                    t["cmd_detail"]     = f"ADSS Auto-Dispatch applied: Diverted to PF 3 Loop Line. Speed locked at 35 km/h to yield to Train {lead_id}."
+                    t["crossing"]       = f"Crossing after Train {lead_id} berths."
+                    self._log(f"ADSS AUTO-DISPATCH EXECUTED: Train {trail_id} diverted to Loop Line PF 3 at 35 km/h. Headway buffer established.")
+
+                if t["id"] == lead_id:
+                    t["current_speed"]  = min(float(t.get("mps", 110.0)), 110.0)
                     t["required_speed"] = t["current_speed"]
                     t["risk_status"]    = "NOMINAL_CLEAR"
                     t["risk_score"]     = 0.0
-                    self._log(f"ADSS Action: Speed restriction of {t['current_speed']:.0f} km/h enforced on Train {trail_id}.")
-                if t["id"] == lead_id:
-                    t["current_speed"]  = min(float(t.get("mps", 110.0)), t["current_speed"] + 15.0)
-                    t["required_speed"] = t["current_speed"]
-                    self._log(f"ADSS Action: Train {lead_id} instructed to clear section at {t['current_speed']:.0f} km/h.")
+                    t["collision_advice"] = None
+                    t["action_text"]    = "Main Line Clearance Granted — 110 km/h"
+                    t["cmd_title"]      = "ACCELERATE TO 110 KM/H (MAIN CLEAR)"
+                    t["cmd_detail"]     = "High-speed main line green corridor cleared. Proceed into platform."
+                    t["crossing"]       = "First crossing precedence."
+                    self._log(f"ADSS AUTO-DISPATCH EXECUTED: Train {lead_id} granted non-stop green corridor at 110 km/h.")
 
         self.alerts = []
-        self.delay_recovered_min += 4.5
-        self.energy_saved_kwh += 320.0
-        self.step(dt=0.0)
-        return {"success": True, "message": "ADSS speed orders transmitted via Kavach LTE."}
+        self.delay_recovered_min += 6.5
+        self.energy_saved_kwh += 450.0
+        self.outer_waits_averted += 12.0
+        return {"success": True, "message": "ADSS Auto-Dispatch executed: Kavach speed orders transmitted & loop line diversion active."}
+
 
     def load_scenario(self, name: str):
-        """Loads curated demonstration scenarios for the hackathon."""
         now = datetime.now()
         self.sim_seconds = 0.0
         self.trains = []
         self.alerts = []
 
         if name == "precedence_demo":
-            # High-speed Rajdhani catching up to an Express on North approach
             self.station_code = "NDLS"
             self.station_info = get_station("NDLS")
             t_exp = {
@@ -268,7 +285,6 @@ class SimulationSession:
             self._log("SCENARIO LOADED: Priority Precedence — Rajdhani overtaking Express approaching NDLS.")
 
         elif name == "kavach_collision_demo":
-            # Dangerous rear-end convergence inside 800m
             self.station_code = "JBP"
             self.station_info = get_station("JBP")
             t1 = {
@@ -297,7 +313,6 @@ class SimulationSession:
             self._log("SCENARIO LOADED: Kavach TCAS Rear-End Conflict — 700m separation at high speed.")
 
         elif name == "zero_wait_demo":
-            # 3 trains scheduled for same throat with calculated smooth speed glide
             self.station_code = "CNB"
             self.station_info = get_station("CNB")
             t1 = {
@@ -354,7 +369,6 @@ class SimulationSession:
             end    = model.NewIntVar(dwell, dwell + 7200, f"e_{t['id']}")
             pf_vars[t["id"]] = pf_v
             
-            # If OHE Traction Failure on UP Main Line, lock out Platform 1 (Main UP Line)
             if self.disruption_active and n_pf > 1:
                 model.Add(pf_v != 1)
 
@@ -401,6 +415,9 @@ class SimulationSession:
                 t.update(adv)
                 t["dynamic_eta"] = adv.get("predicted_arrival_str", t["dynamic_eta"])
                 t["required_speed"] = adv.get("advised_speed", t["required_speed"])
+                t["cmd_title"] = adv.get("cmd_title", t.get("cmd_title", ""))
+                t["cmd_detail"] = adv.get("cmd_detail", t.get("cmd_detail", ""))
+                t["crossing"] = adv.get("crossing", t.get("crossing", ""))
 
         # 2. Collision evaluation per corridor
         corridors: Dict[str, List[Dict]] = {}
@@ -576,7 +593,7 @@ def fetch_and_add(req: SingleTrainRequest):
                 }
                 session.add_single_train(train_data)
                 return {"success": True, "message": f"Live: {name} ({dist_km:.1f}km out)"}
-        except Exception as e:
+        except Exception:
             pass
 
     tmpl   = next((t for t in TRAIN_POOL if t["no"] == clean), random.choice(TRAIN_POOL))
@@ -609,7 +626,7 @@ def remove_train(req: RemoveRequest):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# FRONTEND DASHBOARD — HACKATHON EDITION
+# FRONTEND DASHBOARD — CRYSTAL-CLEAR OUTPUT DIRECTIVES EDITION
 # ──────────────────────────────────────────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse)
 async def dashboard():
@@ -618,30 +635,30 @@ async def dashboard():
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RailRescue — Indian Railways Section Control ADSS</title>
+  <title>RailRescue — Indian Railways Autonomous Section Control ADSS</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
-    body { font-family: 'Inter', sans-serif; background: #06090e; color: #f1f5f9; }
+    body { font-family: 'Inter', sans-serif; background: #04070c; color: #f1f5f9; }
     .mono { font-family: 'JetBrains Mono', monospace; }
     ::-webkit-scrollbar { width: 5px; height: 5px; }
-    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-track { background: #0b111a; }
     ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
-    .signal-green  { background: #22c55e; box-shadow: 0 0 10px #22c55e; }
-    .signal-yellow { background: #eab308; box-shadow: 0 0 10px #eab308; }
-    .signal-orange { background: #f97316; box-shadow: 0 0 10px #f97316; }
-    .signal-red    { background: #ef4444; box-shadow: 0 0 12px #ef4444; }
+    .signal-green  { background: #22c55e; box-shadow: 0 0 12px #22c55e; }
+    .signal-yellow { background: #eab308; box-shadow: 0 0 12px #eab308; }
+    .signal-orange { background: #f97316; box-shadow: 0 0 12px #f97316; }
+    .signal-red    { background: #ef4444; box-shadow: 0 0 14px #ef4444; }
     .signal-gray   { background: #475569; }
-    .tier-badge-2 { background: #be123c22; color: #fb7185; border: 1px solid #be123c55; }
-    .tier-badge-4 { background: #0c4a6e22; color: #38bdf8; border: 1px solid #0c4a6e55; }
-    .tier-badge-5 { background: #4c1d9522; color: #a78bfa; border: 1px solid #4c1d9555; }
-    .tier-badge-7 { background: #7c2d1222; color: #fb923c; border: 1px solid #7c2d1255; }
+    .tier-badge-2 { background: #be123c2a; color: #fda4af; border: 1px solid #be123c77; }
+    .tier-badge-4 { background: #0c4a6e2a; color: #7dd3fc; border: 1px solid #0c4a6e77; }
+    .tier-badge-5 { background: #4c1d952a; color: #c4b5fd; border: 1px solid #4c1d9577; }
+    .tier-badge-7 { background: #7c2d122a; color: #fdba74; border: 1px solid #7c2d1277; }
     .blink { animation: blink 0.9s step-end infinite; }
     @keyframes blink { 50% { opacity: 0; } }
     .pulse-ring { animation: pulse 1.4s cubic-bezier(0,0,0.2,1) infinite; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
-    tr:hover td { background: rgba(255,255,255,0.04); }
-    .gauge-arc { transition: stroke-dashoffset 0.5s ease-out; }
+    .glow-box-cyan { box-shadow: 0 0 25px -5px rgba(6, 182, 212, 0.15); }
+    .glow-box-emerald { box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.15); }
   </style>
 </head>
 <body class="p-3 lg:p-5 min-h-screen">
@@ -672,14 +689,14 @@ async def dashboard():
     <button onclick="control('start')"   class="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 rounded font-bold text-xs mono transition shadow-lg">▶ START</button>
     <button onclick="control('pause')"   class="px-3.5 py-1.5 bg-amber-700   hover:bg-amber-600   rounded font-bold text-xs mono transition">⏸ PAUSE</button>
     <button onclick="control('reset')"   class="px-3.5 py-1.5 bg-slate-700   hover:bg-slate-600   rounded font-bold text-xs mono transition">↺ CLEAR</button>
-    <button onclick="control('disrupt')" class="px-3.5 py-1.5 bg-rose-800    hover:bg-rose-700    rounded font-bold text-xs mono transition" id="disruptBtn"> INJECT DISRUPTION</button>
+    <button onclick="control('disrupt')" class="px-3.5 py-1.5 bg-rose-800    hover:bg-rose-700    rounded font-bold text-xs mono transition" id="disruptBtn">⚡ INJECT DISRUPTION</button>
   </div>
 </div>
 
 <!-- ═══════════════ HACKATHON PRESET SCENARIO BAR ═══════════════ -->
 <div class="bg-gradient-to-r from-slate-900 via-slate-900/90 to-slate-950 border border-cyan-900/40 rounded-xl p-2.5 mb-3 flex flex-wrap items-center justify-between gap-2 shadow-xl">
   <div class="flex items-center gap-2">
-    <span class="text-xs font-black text-cyan-400 mono uppercase tracking-wider"> Demo Scenarios:</span>
+    <span class="text-xs font-black text-cyan-400 mono uppercase tracking-wider">🎯 Demo Scenarios:</span>
   </div>
   <div class="flex items-center gap-2 flex-wrap">
     <button onclick="loadScenario('precedence_demo')" class="px-2.5 py-1 rounded text-xs mono font-bold bg-slate-800 hover:bg-cyan-900/40 text-cyan-300 border border-cyan-800/60 transition">
@@ -770,54 +787,45 @@ async def dashboard():
   </div>
 </div>
 
-<!-- ═══════════════ MAIN SECTION GRID ═══════════════ -->
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<!-- 📢 PRIMARY OUTPUT: AUTONOMOUS SECTION DIRECTIVES & TRAIN COMMAND CARDS     -->
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<div class="bg-slate-900 border border-cyan-800/40 rounded-xl p-4 mb-4 shadow-2xl glow-box-cyan">
+  <div class="flex flex-wrap justify-between items-center pb-2 mb-3 border-b border-slate-800">
+    <div class="flex items-center gap-2">
+      <span class="text-lg">📢</span>
+      <h2 class="text-sm font-black tracking-wider text-cyan-300 uppercase mono">
+        ACTIVE SECTION CONTROL DIRECTIVES & TRAIN OUTPUT COMMANDS
+      </h2>
+    </div>
+    <div class="text-xs mono text-slate-400">
+      Controlled by: <span id="directiveStationName" class="text-white font-bold">Gwalior Junction</span> &bull;
+      Total Inbound: <span id="directiveTrainCount" class="text-cyan-400 font-black">0</span> Trains
+    </div>
+  </div>
+
+  <!-- Directives Container Grid -->
+  <div id="directivesGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+    <div class="col-span-full py-8 text-center text-slate-500 mono text-sm">
+      Enter a station code above and click "Load Station Board" or select a Scenario to view active directions.
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ SECONDARY MONITORING GRID ═══════════════ -->
 <div class="grid grid-cols-12 gap-3">
 
-  <!-- ─── LEFT: PRIORITY TRAFFIC BOARD (8 COLS) ─── -->
-  <div class="col-span-12 xl:col-span-8">
+  <!-- ─── LEFT: LIVE TRACK & PLATFORM INTERLOCKING DIAGRAM (7 COLS) ─── -->
+  <div class="col-span-12 xl:col-span-7 space-y-3">
+    
     <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-2xl">
-      <div class="flex justify-between items-center mb-3">
-        <span class="text-xs font-black text-slate-300 tracking-widest mono uppercase flex items-center gap-2">
-          <span>Priority Traffic Board &mdash; <span id="boardStationName" class="text-cyan-400">Gwalior Junction</span></span>
-          <span class="text-[10px] text-slate-500 font-normal">(Click any train for Loco-Pilot HUD)</span>
-        </span>
-        <span id="runningTag" class="text-[10px] px-2 py-0.5 rounded mono bg-slate-800 text-slate-400 border border-slate-700">STANDBY</span>
-      </div>
-      <div class="overflow-x-auto">
-        <table class="w-full text-left text-xs">
-          <thead>
-            <tr class="text-[10px] text-slate-500 border-b border-slate-800 mono">
-              <th class="pb-2 pr-2">#</th>
-              <th class="pb-2 pr-3">Train</th>
-              <th class="pb-2 pr-2">Corridor</th>
-              <th class="pb-2 pr-2">Sched.</th>
-              <th class="pb-2 pr-2">Predicted</th>
-              <th class="pb-2 pr-2">Delay</th>
-              <th class="pb-2 pr-3">Speed Advisory</th>
-              <th class="pb-2 pr-2">Signal</th>
-              <th class="pb-2 pr-2">PF</th>
-              <th class="pb-2 pr-2">Dist</th>
-              <th class="pb-2">Kavach Status</th>
-              <th class="pb-2"></th>
-            </tr>
-          </thead>
-          <tbody id="boardBody" class="divide-y divide-slate-800/60 font-medium"></tbody>
-        </table>
-        <div id="emptyBoard" class="py-12 text-center text-slate-600 mono text-sm">
-          Select a scenario above or enter a station code to load traffic.
-        </div>
-      </div>
-    </div>
-
-    <!-- ─── SVG TRACK TOPOLOGY MAP ─── -->
-    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-2xl mt-3">
       <div class="flex justify-between items-center mb-2">
         <span class="text-xs font-bold text-slate-400 tracking-widest mono uppercase">
           Live Track & Interlocking Block Diagram &mdash; <span id="mapStationName" class="text-cyan-400">GWL</span>
         </span>
         <span id="disruptionTag" class="text-[10px] px-2 py-0.5 rounded mono bg-emerald-950 text-emerald-400 border border-emerald-800">Nominal Operations</span>
       </div>
-      <svg id="trackSvg" viewBox="0 0 820 260" class="w-full h-56 bg-slate-950 rounded-lg border border-slate-800">
+      <svg id="trackSvg" viewBox="0 0 880 260" class="w-full bg-slate-950 rounded-lg border border-slate-800">
         <!-- Corridors with signal lights -->
         <line x1="40"  y1="50"  x2="260" y2="110" stroke="#1e293b" stroke-width="4"/>
         <text x="8"   y="48"   fill="#64748b" font-size="9" class="mono font-bold">NORTH (UP)</text>
@@ -833,44 +841,66 @@ async def dashboard():
         <line x1="40"  y1="150" x2="260" y2="140" stroke="#334155" stroke-width="2" stroke-dasharray="5"/>
         <text x="8"   y="165"  fill="#475569" font-size="8" class="mono">WEST BR.</text>
 
-        <!-- Platform lines -->
-        <g id="platformLines">
-          <line x1="260" y1="80"  x2="560" y2="80"  stroke="#334155" stroke-width="3"/><text x="568" y="84"  fill="#94a3b8" font-size="9" class="mono font-bold">PF 1</text>
-          <line x1="260" y1="108" x2="560" y2="108" stroke="#334155" stroke-width="3"/><text x="568" y="112" fill="#94a3b8" font-size="9" class="mono font-bold">PF 2</text>
-          <line x1="260" y1="136" x2="560" y2="136" stroke="#334155" stroke-width="3"/><text x="568" y="140" fill="#94a3b8" font-size="9" class="mono font-bold">PF 3</text>
-          <line x1="260" y1="164" x2="560" y2="164" stroke="#334155" stroke-width="3"/><text x="568" y="168" fill="#94a3b8" font-size="9" class="mono font-bold">PF 4</text>
-          <line x1="260" y1="192" x2="560" y2="192" stroke="#334155" stroke-width="3"/><text x="568" y="196" fill="#94a3b8" font-size="9" class="mono font-bold">PF 5</text>
-          <line x1="260" y1="220" x2="560" y2="220" stroke="#334155" stroke-width="3"/><text x="568" y="224" fill="#94a3b8" font-size="9" class="mono font-bold">PF 6</text>
-        </g>
-        <line x1="560" y1="150" x2="780" y2="150" stroke="#1e293b" stroke-width="4"/>
-        <text x="690" y="142" fill="#64748b" font-size="9" class="mono font-bold">DEPARTURE TRUNK</text>
+        <!-- Dynamic Platform lines -->
+        <g id="platformLines"></g>
+        <line x1="620" y1="130" x2="840" y2="130" stroke="#1e293b" stroke-width="4"/>
+        <text x="730" y="122" fill="#64748b" font-size="9" class="mono font-bold">DEPARTURE TRUNK</text>
         <g id="trainSvgContainer"></g>
       </svg>
     </div>
+
+    <!-- Tabular Priority Traffic Board -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-2xl">
+      <div class="flex justify-between items-center mb-2">
+        <span class="text-xs font-black text-slate-400 tracking-widest mono uppercase">
+          Priority Traffic Precedence Table
+        </span>
+        <span id="runningTag" class="text-[10px] px-2 py-0.5 rounded mono bg-slate-800 text-slate-400 border border-slate-700">STANDBY</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead>
+            <tr class="text-[10px] text-slate-500 border-b border-slate-800 mono">
+              <th class="pb-2 pr-2">#</th>
+              <th class="pb-2 pr-3">Train</th>
+              <th class="pb-2 pr-2">Corridor</th>
+              <th class="pb-2 pr-2">Sched.</th>
+              <th class="pb-2 pr-2">ETA</th>
+              <th class="pb-2 pr-2">Delay</th>
+              <th class="pb-2 pr-3">Advised Speed</th>
+              <th class="pb-2 pr-2">Signal</th>
+              <th class="pb-2 pr-2">PF</th>
+              <th class="pb-2 pr-2">Dist</th>
+              <th class="pb-2">Safety</th>
+            </tr>
+          </thead>
+          <tbody id="boardBody" class="divide-y divide-slate-800/60 font-medium"></tbody>
+        </table>
+      </div>
+    </div>
+
   </div>
 
-  <!-- ─── RIGHT: LOCO-PILOT CAB HUD + LOG (4 COLS) ─── -->
-  <div class="col-span-12 xl:col-span-4 space-y-3">
+  <!-- ─── RIGHT: LOCO-PILOT CAB HUD + DISPATCH DIARY (5 COLS) ─── -->
+  <div class="col-span-12 xl:col-span-5 space-y-3">
 
     <!-- LOCO-PILOT CAB HUD (DMI) -->
     <div class="bg-gradient-to-b from-slate-900 to-slate-950 border border-cyan-800/40 rounded-xl p-4 shadow-2xl relative overflow-hidden">
       <div class="flex justify-between items-center mb-3">
         <span class="text-xs font-black text-cyan-400 tracking-widest mono uppercase flex items-center gap-1.5">
-          <span>🚂 LOCO PILOT CAB HUD (DMI)</span>
+          <span>🚂 IN-CAB LOCO PILOT HUD (DMI)</span>
         </span>
         <span class="text-[10px] px-2 py-0.5 rounded mono bg-cyan-950 text-cyan-300 border border-cyan-700 font-bold" id="hudTrainNo">
-          12301 (Rajdhani)
+          Select a Train Card
         </span>
       </div>
 
       <div class="grid grid-cols-2 gap-3 mb-3">
-        <!-- Speedometer -->
         <div class="bg-slate-950/80 p-3 rounded-lg border border-slate-800 text-center">
           <div class="text-[10px] text-slate-400 mono uppercase font-bold">Current Speed</div>
-          <div class="text-2xl font-black mono text-cyan-300 mt-1" id="hudCurSpeed">115 <span class="text-xs text-slate-400 font-normal">km/h</span></div>
-          <div class="text-[10px] text-emerald-400 mono mt-1 font-bold">Advised: <span id="hudAdvSpeed">130 km/h</span></div>
+          <div class="text-2xl font-black mono text-cyan-300 mt-1" id="hudCurSpeed">-- <span class="text-xs text-slate-400 font-normal">km/h</span></div>
+          <div class="text-[10px] text-emerald-400 mono mt-1 font-bold">Advised: <span id="hudAdvSpeed">-- km/h</span></div>
         </div>
-        <!-- Cab Signal -->
         <div class="bg-slate-950/80 p-3 rounded-lg border border-slate-800 text-center flex flex-col justify-center items-center">
           <div class="text-[10px] text-slate-400 mono uppercase font-bold mb-1">Cab Signal Aspect</div>
           <div class="w-7 h-7 rounded-full flex items-center justify-center signal-green" id="hudSignalBall"></div>
@@ -878,35 +908,29 @@ async def dashboard():
         </div>
       </div>
 
-      <!-- Distance to Target & Throttle Advisory -->
       <div class="bg-slate-950/80 p-2.5 rounded-lg border border-slate-800 text-xs mono space-y-1.5">
         <div class="flex justify-between">
           <span class="text-slate-400">Target Distance:</span>
-          <span class="font-bold text-white" id="hudDist">2.90 km</span>
+          <span class="font-bold text-white" id="hudDist">-- km</span>
         </div>
         <div class="flex justify-between">
           <span class="text-slate-400">Target Platform:</span>
-          <span class="font-bold text-cyan-400" id="hudPF">Platform 1</span>
+          <span class="font-bold text-cyan-400" id="hudPF">Platform --</span>
         </div>
         <div class="pt-1 border-t border-slate-800/80 text-[11px] text-amber-300 leading-tight" id="hudAdvice">
-          Maintain 130 km/h — Section clear, on scheduled arrival timetable.
+          Select any train above to inspect real-time in-cab throttle recommendations.
         </div>
       </div>
     </div>
 
-    <!-- Signal Aspect Board -->
-    <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5 shadow-xl">
-      <h2 class="text-xs font-black text-slate-400 tracking-widest mono uppercase mb-2">
-        Signal Aspect & Interlocking Board
-      </h2>
-      <div id="signalPanel" class="space-y-1.5 max-h-48 overflow-y-auto pr-1"></div>
-    </div>
-
-    <!-- Dispatch Diary / Agent Log -->
-    <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5 flex flex-col shadow-xl" style="height:230px">
-      <h2 class="text-xs font-black text-slate-400 tracking-widest mono uppercase mb-2">
-        Section Controller COA Diary
-      </h2>
+    <!-- Official COA Controller Diary / Live Transmissions Stream -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5 flex flex-col shadow-xl" style="height:320px">
+      <div class="flex justify-between items-center mb-2">
+        <h2 class="text-xs font-black text-slate-400 tracking-widest mono uppercase">
+          Section Controller Transmission Diary
+        </h2>
+        <span class="text-[9px] px-1.5 py-0.5 rounded mono bg-slate-800 text-slate-400">COA v4.2</span>
+      </div>
       <div id="agentLog" class="flex-1 bg-slate-950 p-2.5 rounded-lg border border-slate-800 overflow-y-auto mono text-[10px] text-slate-300 space-y-1"></div>
     </div>
 
@@ -945,14 +969,31 @@ async function loadScenario(name) {
 }
 
 async function autoResolve() {
+  const btn = document.querySelector("#alertBanner button");
+  if (btn) {
+    btn.innerText = "⏳ Transmitting via Kavach LTE...";
+    btn.disabled = true;
+  }
   try {
     const r = await fetch(`/api/auto_resolve`, { method: "POST" });
     const d = await r.json();
     console.log("Auto-resolve:", d);
+    
+    const alertBanner = document.getElementById("alertBanner");
+    if (alertBanner) alertBanner.classList.add("hidden");
+    
+    const loadStatus = document.getElementById("loadStatus");
+    if (loadStatus) loadStatus.innerText = "🛡️ " + (d.message || "ADSS Auto-Dispatch applied!");
   } catch(e) {
     console.error("Auto resolve error:", e);
+  } finally {
+    if (btn) {
+      btn.innerText = "🛡️ Apply ADSS Auto-Dispatch";
+      btn.disabled = false;
+    }
   }
 }
+
 
 async function loadStation() {
   const codeIn = document.getElementById("stCode");
@@ -1029,7 +1070,7 @@ function tierBadgeClass(tier) {
 }
 
 function tierLabel(tier) {
-  return { 2:"Raj/VB", 4:"SF", 5:"Exp", 7:"Freight" }[tier] || "Exp";
+  return { 2:"Tier 2 (Raj/VB)", 4:"Tier 4 (Superfast)", 5:"Tier 5 (Express)", 7:"Tier 7 (Freight)" }[tier] || "Express";
 }
 
 function delayBadge(delayMin, color) {
@@ -1047,8 +1088,10 @@ function renderDashboard(data) {
   // Header & Info
   const stLabel = document.getElementById("stationLabel");
   if (stLabel) stLabel.innerText = `${data.station_code} — ${data.station_name}`;
-  const bName = document.getElementById("boardStationName");
-  if (bName) bName.innerText = data.station_name;
+  const dStName = document.getElementById("directiveStationName");
+  if (dStName) dStName.innerText = data.station_name;
+  const dCount = document.getElementById("directiveTrainCount");
+  if (dCount) dCount.innerText = (data.trains || []).length;
   const mName = document.getElementById("mapStationName");
   if (mName) mName.innerText = data.station_code;
   const sDate = document.getElementById("simDate");
@@ -1112,15 +1155,15 @@ function renderDashboard(data) {
     }
   }
 
-  // ── Priority Traffic Board ──
-  const tbody = document.getElementById("boardBody");
-  const empty = document.getElementById("emptyBoard");
-  if (tbody && empty) {
+  // ── PRIMARY OUTPUT: DIRECTIVES CARDS GRID ──
+  const dGrid = document.getElementById("directivesGrid");
+  if (dGrid) {
     if (!data.trains || data.trains.length === 0) {
-      tbody.innerHTML = "";
-      empty.style.display = "block";
+      dGrid.innerHTML = `
+        <div class="col-span-full py-8 text-center text-slate-500 mono text-sm">
+          No trains active in section. Enter a station code or pick a scenario above.
+        </div>`;
     } else {
-      empty.style.display = "none";
       const sorted = [...data.trains].sort((a, b) =>
         (a.priority_rank || 99) - (b.priority_rank || 99) || a.tier - b.tier
       );
@@ -1129,59 +1172,87 @@ function renderDashboard(data) {
         selectedTrainId = sorted[0].id;
       }
 
-      tbody.innerHTML = sorted.map(t => {
+      dGrid.innerHTML = sorted.map(t => {
         const isSel = (t.id === selectedTrainId);
-        const rowBg = isSel ? "bg-cyan-950/40 border-l-2 border-cyan-400" : "";
+        const cardBorder = isSel ? "border-cyan-400 ring-2 ring-cyan-500/20 bg-slate-900" : "border-slate-800 bg-slate-950/70 hover:border-slate-700";
+        
+        const distKm = ((t.dist_remaining || 0) / 1000).toFixed(1);
+        const speedCmd = t.cmd_title || `RUN AT ${(t.advised_speed || t.mps).toFixed(0)} KM/H`;
+        const speedDetail = t.cmd_detail || t.action_text || "Maintain section timetable speed.";
+        const crossingText = t.crossing || "Cleared for direct approach.";
 
-        const riskCls = t.risk_status === "HARD_INTERLOCK_VIOLATION"
-          ? "text-rose-400 font-black blink"
+        const riskBadge = t.risk_status === "HARD_INTERLOCK_VIOLATION"
+          ? `<span class="px-2 py-0.5 rounded text-[10px] font-black mono bg-rose-950 text-rose-300 border border-rose-600 blink">🚨 KAVACH BRAKE VIOLATION</span>`
           : t.risk_status === "CRITICAL_CONFLICT"
-          ? "text-amber-400 font-bold"
-          : t.risk_status === "CAUTION_CONVERGING"
-          ? "text-orange-400"
-          : "text-emerald-400";
+          ? `<span class="px-2 py-0.5 rounded text-[10px] font-black mono bg-amber-950 text-amber-300 border border-amber-600">⚠️ CONFLICT DETECTED</span>`
+          : `<span class="px-2 py-0.5 rounded text-[10px] font-black mono bg-emerald-950/70 text-emerald-400 border border-emerald-800">🛡️ KAVACH PROTECTED</span>`;
 
-        const sigDot = `<span class="inline-block w-2.5 h-2.5 rounded-full mr-1 ${signalClass(t.signal_aspect)}"></span>`;
-
-        const delayBdg = t.status && t.status.includes("BERTHED")
-          ? `<span class="text-emerald-400 mono text-[10px] font-bold">ARRIVED</span>`
-          : delayBadge(t.delay_min || 0, t.delay_color || "#6b7280");
-
-        const speedAdv = t.status && t.status.includes("BERTHED")
-          ? "—"
-          : `<div class="mono text-[10px] leading-tight">
-               <div><span style="color:${t.delay_color||'#6b7280'}" class="font-black">${(t.advised_speed||0).toFixed(0)} km/h</span></div>
-               <div class="text-slate-500 truncate max-w-40">${t.action_text||""}</div>
-             </div>`;
-
-        return `<tr onclick="selectTrainForHUD('${t.id}')" class="border-b border-slate-800/40 hover:bg-slate-800/30 cursor-pointer transition ${rowBg}">
-          <td class="py-2.5 pr-2 mono text-slate-400 font-black">${t.priority_rank || "—"}</td>
-          <td class="pr-3">
-            <div class="flex items-center gap-1.5">
-              <span class="w-2 h-2 rounded-full shrink-0" style="background:${t.color}"></span>
-              <div>
-                <div class="font-black text-white text-xs">${t.id}</div>
-                <div class="text-[10px] text-slate-400 truncate max-w-28">${(t.name||"").substring(0,18)}</div>
-                <span class="text-[9px] px-1 rounded font-bold ${tierBadgeClass(t.tier)}">${tierLabel(t.tier)}</span>
+        return `
+        <div onclick="selectTrainForHUD('${t.id}')" class="p-3.5 rounded-xl border ${cardBorder} transition cursor-pointer flex flex-col justify-between shadow-lg">
+          
+          <!-- Top Row: Train Identity & Precedence -->
+          <div>
+            <div class="flex items-start justify-between gap-2 pb-2 mb-2 border-b border-slate-800/80">
+              <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full shrink-0" style="background:${t.color}"></span>
+                <div>
+                  <div class="font-black text-sm text-white mono flex items-center gap-1.5">
+                    <span>Train ${t.id}</span>
+                    <span class="text-xs text-slate-300 font-normal">(${t.name})</span>
+                  </div>
+                  <div class="flex items-center gap-1.5 mt-0.5">
+                    <span class="text-[9px] px-1.5 py-0.2 rounded font-bold mono ${tierBadgeClass(t.tier)}">${tierLabel(t.tier)}</span>
+                    <span class="text-[10px] text-slate-400 mono font-semibold">Priority #${t.priority_rank || 1}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="text-right">
+                <span class="text-xs font-black mono text-cyan-400">${distKm} km</span>
+                <div class="text-[9px] text-slate-500 mono">${t.corridor_dir || "N"} Corridor</div>
               </div>
             </div>
-          </td>
-          <td class="pr-2 text-[10px] mono text-slate-400">${t.corridor_dir||"?"} <br><span class="text-slate-600">${(t.route_type||"").substring(0,14)}</span></td>
-          <td class="pr-2 mono text-[10px] text-slate-300">${t.scheduled_arrival_str||"--:--"}</td>
-          <td class="pr-2 mono text-[10px] text-cyan-300">${t.predicted_arrival_str||t.dynamic_eta||"--:--"}</td>
-          <td class="pr-2">${delayBdg}</td>
-          <td class="pr-3">${speedAdv}</td>
-          <td class="pr-2">
-            <div class="flex items-center gap-1 mono text-[10px]">
-              ${sigDot}<span style="color:${t.signal_color||'#6b7280'}">${t.signal_aspect||"?"}</span>
+
+            <!-- Central Big Speed Command Badge -->
+            <div class="p-2.5 rounded-lg bg-slate-900 border border-slate-800 mb-2.5">
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] uppercase mono font-black text-slate-400">⚡ Operational Speed Directive</span>
+                <span class="text-xs font-black mono" style="color:${t.delay_color || '#3b82f6'}">${(t.advised_speed || 0).toFixed(0)} km/h</span>
+              </div>
+              <div class="text-xs font-black mono text-cyan-300 mt-1">${speedCmd}</div>
+              <div class="text-[11px] text-slate-300 mt-1 leading-snug">${speedDetail}</div>
             </div>
-            <div class="text-[9px] text-slate-600 truncate max-w-20">${(t.signal_km_from_station||0).toFixed(1)}km</div>
-          </td>
-          <td class="pr-2 mono font-black text-cyan-400 text-[10px]">PF ${t.allocated_pf||1}</td>
-          <td class="pr-2 mono text-[10px] text-slate-400">${((t.dist_remaining||0)/1000).toFixed(1)}km</td>
-          <td class="mono text-[10px] ${riskCls}">${t.risk_status||"NOMINAL"}</td>
-          <td><button onclick="event.stopPropagation(); removeTrain('${t.id}')" class="text-slate-600 hover:text-rose-400 font-bold text-xs px-1">&times;</button></td>
-        </tr>`;
+
+            <!-- Signal & Crossing Directives -->
+            <div class="grid grid-cols-2 gap-2 text-[11px] mono mb-2">
+              <div class="p-2 rounded bg-slate-900/60 border border-slate-800/80">
+                <div class="text-[9px] text-slate-400 uppercase font-bold">Signal Directive</div>
+                <div class="flex items-center gap-1.5 mt-1">
+                  <span class="w-2.5 h-2.5 rounded-full ${signalClass(t.signal_aspect)}"></span>
+                  <span class="font-black text-white">${t.signal_aspect || "CLEAR"}</span>
+                </div>
+                <div class="text-[10px] text-slate-400 truncate mt-0.5">${(t.signal_km_from_station || 0).toFixed(1)}km to Signal</div>
+              </div>
+
+              <div class="p-2 rounded bg-slate-900/60 border border-slate-800/80">
+                <div class="text-[9px] text-slate-400 uppercase font-bold">Platform Berth</div>
+                <div class="font-black text-cyan-400 text-xs mt-1">Platform ${t.allocated_pf || 1}</div>
+                <div class="text-[10px] text-slate-400 truncate mt-0.5">ETA: ${t.predicted_arrival_str || t.dynamic_eta || "--:--"}</div>
+              </div>
+            </div>
+
+            <!-- Precedence & Crossing Action -->
+            <div class="p-2 rounded bg-slate-900/40 border border-slate-800 text-[10px] mono text-slate-300">
+              <span class="text-slate-500 font-bold">Crossing:</span> ${crossingText}
+            </div>
+          </div>
+
+          <!-- Bottom Row: Safety Interlock Badge -->
+          <div class="pt-2 mt-2 border-t border-slate-800/80 flex items-center justify-between">
+            ${riskBadge}
+            <span class="text-[10px] mono text-slate-400">Delay: ${delayBadge(t.delay_min || 0, t.delay_color || '#6b7280')}</span>
+          </div>
+
+        </div>`;
       }).join("");
 
       // ── Loco Pilot HUD ──
@@ -1205,31 +1276,47 @@ function renderDashboard(data) {
         const hPf = document.getElementById("hudPF");
         if (hPf) hPf.innerText = `Platform ${selTrain.allocated_pf || 1}`;
         const hAdvT = document.getElementById("hudAdvice");
-        if (hAdvT) hAdvT.innerText = selTrain.action_text || "Maintain section speed.";
+        if (hAdvT) hAdvT.innerText = selTrain.cmd_detail || selTrain.action_text || "Maintain section speed.";
       }
     }
   }
 
-  // ── Signal Aspect Panel ──
-  const sigPanel = document.getElementById("signalPanel");
-  if (sigPanel) {
-    sigPanel.innerHTML = (data.trains || []).length === 0
-      ? `<p class="text-slate-600 text-xs mono">No trains loaded.</p>`
-      : (data.trains || []).map(t => `
-        <div class="flex items-start gap-2 p-2 rounded bg-slate-800/40 border border-slate-700/30">
-          <div class="w-3 h-3 rounded-full shrink-0 mt-0.5 ${signalClass(t.signal_aspect)}"></div>
-          <div class="flex-1 min-w-0">
-            <div class="flex justify-between items-center">
-              <span class="font-black text-white text-[11px] mono">Train ${t.id}</span>
-              <span class="text-[10px] font-bold mono" style="color:${t.signal_color||'#6b7280'}">${t.signal_aspect}</span>
+  // ── Tabular Priority Table ──
+  const tbody = document.getElementById("boardBody");
+  if (tbody) {
+    if (!data.trains || data.trains.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="11" class="py-6 text-center text-slate-600 mono">No trains loaded.</td></tr>`;
+    } else {
+      const sorted = [...data.trains].sort((a, b) =>
+        (a.priority_rank || 99) - (b.priority_rank || 99) || a.tier - b.tier
+      );
+      tbody.innerHTML = sorted.map(t => `
+        <tr onclick="selectTrainForHUD('${t.id}')" class="border-b border-slate-800/40 hover:bg-slate-800/30 cursor-pointer transition">
+          <td class="py-2 pr-2 mono text-slate-400 font-black">${t.priority_rank || "—"}</td>
+          <td class="pr-3">
+            <div class="flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full shrink-0" style="background:${t.color}"></span>
+              <div>
+                <div class="font-black text-white text-xs">${t.id}</div>
+                <div class="text-[10px] text-slate-400 truncate max-w-28">${(t.name||"").substring(0,18)}</div>
+              </div>
             </div>
-            <div class="text-[10px] text-slate-500 truncate">${t.signal_reason||""}</div>
-            <div class="text-[9px] text-slate-600 mono">${(t.signal_km_from_station||0).toFixed(2)}km from station &bull; Target: ${(t.signal_max_speed||0).toFixed(0)} km/h</div>
-          </div>
-        </div>`).join("");
+          </td>
+          <td class="pr-2 text-[10px] mono text-slate-400">${t.corridor_dir||"?"}</td>
+          <td class="pr-2 mono text-[10px] text-slate-300">${t.scheduled_arrival_str||"--:--"}</td>
+          <td class="pr-2 mono text-[10px] text-cyan-300">${t.predicted_arrival_str||t.dynamic_eta||"--:--"}</td>
+          <td class="pr-2">${delayBadge(t.delay_min || 0, t.delay_color || "#6b7280")}</td>
+          <td class="pr-3 mono font-black" style="color:${t.delay_color || '#3b82f6'}">${(t.advised_speed||0).toFixed(0)} km/h</td>
+          <td class="pr-2 mono text-[10px]"><span class="inline-block w-2 h-2 rounded-full mr-1 ${signalClass(t.signal_aspect)}"></span>${t.signal_aspect||"?"}</td>
+          <td class="pr-2 mono font-black text-cyan-400 text-[10px]">PF ${t.allocated_pf||1}</td>
+          <td class="pr-2 mono text-[10px] text-slate-400">${((t.dist_remaining||0)/1000).toFixed(1)}km</td>
+          <td class="mono text-[10px] text-emerald-400">${t.risk_status === 'NOMINAL_CLEAR' ? 'PROTECTED' : t.risk_status}</td>
+        </tr>
+      `).join("");
+    }
   }
 
-  // ── Section Controller Diary ──
+  // ── Section Controller Diary Log ──
   const aLog = document.getElementById("agentLog");
   if (aLog) {
     aLog.innerHTML = (data.logs || []).map(l => `<div class="leading-snug">${l}</div>`).join("");
@@ -1328,7 +1415,6 @@ function initWS() {
   };
 }
 
-// Start WebSocket on page load
 initWS();
 </script>
 </body>
