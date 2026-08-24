@@ -1,11 +1,12 @@
 """
 app.py — RailRescue Station Control Room (SCR) & Autonomous Decision Support System (ADSS)
-Designed for Indian Railways Section Control & Hackathon Showcase.
+Distributed Multi-Agent System (MAS) Edition.
 Features:
+  - Multi-Agent Mesh Protocol (Inter-Station Webhooks, DMAPPC Consensus, 3-Way Cascades)
   - Multi-Station Ingestion (RailRadar API + 50 Major Stations)
   - Kavach TCAS Spatiotemporal Conflict Engine with 1-Click Auto-Dispatch Resolution
   - Zero-Delay Dynamic Speed Optimization & Priority Precedence
-  - Crystal-Clear Live Autonomous Directives & Output Cards
+  - Saturated Station Capacity Rejection (REJECTED_HOLD / 0 km/h Outer Hold)
   - Driver Machine Interface (DMI / In-Cab Loco Pilot HUD)
   - 4 Demo Preset Scenarios for Live Hackathon Presentations
   - Live ROI Metrics (Delay Saved, Energy Conserved, Outer Signal Idling Averted)
@@ -17,7 +18,7 @@ from typing import List, Dict, Any, Optional
 from google import genai
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 from ortools.sat.python import cp_model
 
@@ -25,10 +26,13 @@ from station_engine import StationBoardFetcher, get_station, TIER_COLORS, DIR_TO
 from signal_engine   import SignalEngine
 from speed_advisor   import SpeedAdvisor
 from conflict_engine import ConflictRiskEngine
+from agent_mesh_communicator import attach_mesh_communicator
 
-app = FastAPI(title="RailRescue — Indian Railways Station Control Room ADSS")
+app = FastAPI(title="RailRescue — Indian Railways Distributed Multi-Agent Station Control")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+DEFAULT_STATION_CODE = os.getenv("STATION_CODE", "GWL").upper()
+PORT = int(os.getenv("PORT", "8000"))
 
 # ──────────────────────────────────────────────────────────────────────────────
 # KINEMATICS & SATELLITE TELEMETRY
@@ -87,7 +91,7 @@ class AIDispatcher:
             )
             resp = client.models.generate_content(model="gemini-2.5-flash", contents=context)
             return resp.text.strip()
-        except Exception as e:
+        except Exception:
             return "AI Dispatch: Section caution order issued. Emergency speed limit 30 km/h applied."
 
 
@@ -95,9 +99,9 @@ class AIDispatcher:
 # SIMULATION SESSION & ADSS STATE MANAGER
 # ──────────────────────────────────────────────────────────────────────────────
 class SimulationSession:
-    def __init__(self):
-        self.station_code   = "GWL"
-        self.station_info   = get_station("GWL")
+    def __init__(self, station_code: str = DEFAULT_STATION_CODE):
+        self.station_code   = station_code
+        self.station_info   = get_station(station_code)
         self.is_running     = False
         self.sim_seconds    = 0.0
         self.sim_base_dt    = datetime.now()
@@ -109,7 +113,7 @@ class SimulationSession:
         self.delay_recovered_min = 14.5
         self.energy_saved_kwh    = 840.0
         self.outer_waits_averted = 24.0
-        self._log("RailRescue ADSS initialized. Ready for section control.")
+        self._log(f"RailRescue ADSS initialized for Station {self.station_code}. Multi-Agent Mesh active.")
 
     def _log(self, msg: str):
         ts = (self.sim_base_dt + timedelta(seconds=self.sim_seconds)).strftime("%H:%M:%S")
@@ -131,7 +135,7 @@ class SimulationSession:
             self._spawn_train(t)
 
         self._recalculate_platforms()
-        src = "Live RailRadar API" if api_key else "Simulation (No API Key)"
+        src = "Live RailRadar API" if api_key else "Simulation Benchmark (Authentic Timetable)"
         self._log(f"Loaded {self.station_info['name']} ({code}) — {len(self.trains)} trains inbound via {src}.")
         self.step(dt=0.0)
         return {"station_code": code, "station_name": self.station_info["name"],
@@ -215,13 +219,12 @@ class SimulationSession:
             lead_id  = a.get("lead_id")
             for t in self.trains:
                 if t["id"] == trail_id:
-                    # Enforce immediate safety deceleration and divert to loop line
                     t["current_speed"]  = 35.0
                     t["required_speed"] = 35.0
                     t["advised_speed"]  = 35.0
-                    t["dist_remaining"] += 3500.0  # Buffer separation established
+                    t["dist_remaining"] += 3500.0
                     t["dist"] = max(t["dist"], t["dist_remaining"])
-                    t["allocated_pf"]   = 3  # Divert to loop line Platform 3
+                    t["allocated_pf"]   = 3
                     t["risk_status"]    = "NOMINAL_CLEAR"
                     t["risk_score"]     = 0.0
                     t["collision_advice"] = None
@@ -248,7 +251,6 @@ class SimulationSession:
         self.energy_saved_kwh += 450.0
         self.outer_waits_averted += 12.0
         return {"success": True, "message": "ADSS Auto-Dispatch executed: Kavach speed orders transmitted & loop line diversion active."}
-
 
     def load_scenario(self, name: str):
         now = datetime.now()
@@ -351,6 +353,34 @@ class SimulationSession:
             self._recalculate_platforms()
             self._log("SCENARIO LOADED: Zero-Wait Glide In — 3 trains sequenced for seamless outer entry.")
 
+        elif name == "boundary_rejection_demo":
+            self.station_code = "GWL"
+            self.station_info = get_station("GWL")
+            t_raj = {
+                "id": "12002", "name": "Bhopal Shatabdi Express", "tier": 2,
+                "corridor_dir": "N", "corridor": "NORTH_CORRIDOR",
+                "route_type": "Agra Inbound (Trunk)", "best_route": "Boundary -> PF 1",
+                "dist_m": 2900.0, "current_speed": 130.0, "mps": 150.0,
+                "mass": 450.0, "pax": 1100, "delay_min": 0.0,
+                "scheduled_arrival_offset_sec": 90.0,
+                "scheduled_arrival_str": (now + timedelta(seconds=90)).strftime("%H:%M:%S"),
+                "color": TIER_COLORS[2], "source": "AGC", "dest": "GWL"
+            }
+            t_freight = {
+                "id": "41502", "name": "NCR Container Freight", "tier": 7,
+                "corridor_dir": "N", "corridor": "NORTH_CORRIDOR",
+                "route_type": "Agra Inbound (Trunk)", "best_route": "Boundary -> HOLD",
+                "dist_m": 3200.0, "current_speed": 65.0, "mps": 75.0,
+                "mass": 3800.0, "pax": 0, "delay_min": 5.0,
+                "scheduled_arrival_offset_sec": 240.0,
+                "scheduled_arrival_str": (now + timedelta(seconds=240)).strftime("%H:%M:%S"),
+                "color": TIER_COLORS[7], "source": "AGC", "dest": "GWL"
+            }
+            self._spawn_train(t_raj)
+            self._spawn_train(t_freight)
+            self._recalculate_platforms()
+            self._log("SCENARIO LOADED: MAS Boundary Rejection — Saturated Agent rejects low-priority freight with 0 km/h outer hold.")
+
         self.step(dt=0.0)
         return {"success": True, "scenario": name, "station": self.station_code, "trains": len(self.trains)}
 
@@ -413,8 +443,8 @@ class SimulationSession:
             if tid in advisories:
                 adv = advisories[tid]
                 t.update(adv)
-                t["dynamic_eta"] = adv.get("predicted_arrival_str", t["dynamic_eta"])
-                t["required_speed"] = adv.get("advised_speed", t["required_speed"])
+                t["dynamic_eta"] = adv.get("predicted_arrival_str", t.get("dynamic_eta", "--:--"))
+                t["required_speed"] = adv.get("advised_speed", t.get("required_speed", 80.0))
                 t["cmd_title"] = adv.get("cmd_title", t.get("cmd_title", ""))
                 t["cmd_detail"] = adv.get("cmd_detail", t.get("cmd_detail", ""))
                 t["crossing"] = adv.get("crossing", t.get("crossing", ""))
@@ -422,7 +452,8 @@ class SimulationSession:
         # 2. Collision evaluation per corridor
         corridors: Dict[str, List[Dict]] = {}
         for t in self.trains:
-            corridors.setdefault(t["corridor"], []).append(t)
+            c_name = t.get("corridor") or "NORTH_CORRIDOR"
+            corridors.setdefault(c_name, []).append(t)
 
         self.alerts = []
         for corridor_trains in corridors.values():
@@ -430,71 +461,86 @@ class SimulationSession:
             self.alerts.extend(new_alerts)
             for alert in new_alerts:
                 for t in self.trains:
-                    if t["id"] == alert["trail_id"]:
-                        t["risk_score"]       = alert["risk_score"]
-                        t["risk_status"]      = alert["status"]
-                        t["collision_advice"] = alert["recommended_action"].get(alert["trail_id"], "")
-                        if alert["status"] in ("CRITICAL_CONFLICT", "HARD_INTERLOCK_VIOLATION"):
+                    if t.get("id") == alert.get("trail_id"):
+                        t["risk_score"]       = alert.get("risk_score", 0.0)
+                        t["risk_status"]      = alert.get("status", "NOMINAL_CLEAR")
+                        t["collision_advice"] = alert.get("recommended_action", {}).get(alert.get("trail_id"), "")
+                        if t["risk_status"] in ("CRITICAL_CONFLICT", "HARD_INTERLOCK_VIOLATION"):
                             t["required_speed"] = 0.0
-                    if t["id"] == alert["lead_id"]:
-                        t["collision_advice"] = alert["recommended_action"].get(alert["lead_id"], "")
+                    if t.get("id") == alert.get("lead_id"):
+                        t["collision_advice"] = alert.get("recommended_action", {}).get(alert.get("lead_id"), "")
 
         # 3. Physics integration when running
         if self.is_running:
             for t in self.trains:
-                if t["dist_remaining"] > 0:
-                    target = t.get("required_speed", t["mps"])
-                    if t["risk_status"] in ("CRITICAL_CONFLICT", "HARD_INTERLOCK_VIOLATION"):
+                dist_rem = float(t.get("dist_remaining", 0.0))
+                if dist_rem > 0:
+                    target = float(t.get("required_speed", t.get("mps", 100.0)))
+                    if t.get("risk_status") in ("CRITICAL_CONFLICT", "HARD_INTERLOCK_VIOLATION"):
                         target = 0.0
-                    if t["current_speed"] > target:
-                        t["current_speed"] = max(target, t["current_speed"] - Kinematics.SERVICE_DECEL * 3.6 * dt)
-                    elif t["current_speed"] < target:
-                        t["current_speed"] = min(target, t["current_speed"] + Kinematics.ACCEL * 3.6 * dt)
+                    cur_spd = float(t.get("current_speed", 80.0))
+                    if cur_spd > target:
+                        t["current_speed"] = max(target, cur_spd - Kinematics.SERVICE_DECEL * 3.6 * dt)
+                    elif cur_spd < target:
+                        t["current_speed"] = min(target, cur_spd + Kinematics.ACCEL * 3.6 * dt)
                     
                     travelled = (t["current_speed"] / 3.6) * dt
-                    t["dist_remaining"] = max(0.0, t["dist_remaining"] - travelled)
-                    t["gps"] = Kinematics.compute_gps(t["corridor"], t["dist_remaining"], lat0, lon0)
+                    t["dist_remaining"] = max(0.0, dist_rem - travelled)
+                    t["gps"] = Kinematics.compute_gps(t.get("corridor", "NORTH_CORRIDOR"), t["dist_remaining"], lat0, lon0)
                 else:
                     t["current_speed"]  = 0.0
                     t["required_speed"] = 0.0
-                    t["status"]         = f"BERTHED @ PF {t['allocated_pf']}"
+                    t["status"]         = f"BERTHED @ PF {t.get('allocated_pf', 1)}"
                     t["gps"]            = {"lat": lat0, "lon": lon0}
                     t["dynamic_eta"]    = "Arrived"
         else:
             for t in self.trains:
-                t["gps"] = Kinematics.compute_gps(t["corridor"], t["dist_remaining"], lat0, lon0)
+                t["gps"] = Kinematics.compute_gps(t.get("corridor", "NORTH_CORRIDOR"), float(t.get("dist_remaining", 0.0)), lat0, lon0)
+
 
 
 session = SimulationSession()
+mesh_comm = attach_mesh_communicator(app, session, session.station_code)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# WEBSOCKET STREAM
+# WEBSOCKET & REST TELEMETRY STREAM
 # ──────────────────────────────────────────────────────────────────────────────
+def _get_telemetry_payload() -> Dict[str, Any]:
+    cur_clock = session.sim_base_dt + timedelta(seconds=session.sim_seconds)
+    return {
+        "station_code":     session.station_code,
+        "station_name":     session.station_info.get("name", session.station_code),
+        "station_zone":     session.station_info.get("zone", "IR"),
+        "station_platforms":session.station_info.get("platforms", 6),
+        "sim_clock":        cur_clock.strftime("%H:%M:%S"),
+        "sim_date":         cur_clock.strftime("%d %b %Y"),
+        "is_running":       session.is_running,
+        "disruption_active":session.disruption_active,
+        "disruption_text":  session.disruption_text,
+        "delay_recovered":  round(session.delay_recovered_min, 1),
+        "energy_saved":     round(session.energy_saved_kwh, 0),
+        "outer_waits":      round(session.outer_waits_averted, 1),
+        "trains":           session.trains,
+        "alerts":           session.alerts,
+        "logs":             session.logs,
+        "mesh_directive":   mesh_comm.last_mesh_directive,
+        "peers":            list(mesh_comm.peers.keys()),
+    }
+
+@app.get("/api/telemetry")
+def get_telemetry():
+    """HTTP fallback polling endpoint for telemetry."""
+    session.step(dt=0.5 if session.is_running else 0.0)
+    return _get_telemetry_payload()
+
 @app.websocket("/ws/telemetry")
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
     try:
         while True:
             session.step(dt=1.0)
-            cur_clock = session.sim_base_dt + timedelta(seconds=session.sim_seconds)
-            payload = {
-                "station_code":     session.station_code,
-                "station_name":     session.station_info.get("name", session.station_code),
-                "station_zone":     session.station_info.get("zone", "IR"),
-                "station_platforms":session.station_info.get("platforms", 6),
-                "sim_clock":        cur_clock.strftime("%H:%M:%S"),
-                "sim_date":         cur_clock.strftime("%d %b %Y"),
-                "is_running":       session.is_running,
-                "disruption_active":session.disruption_active,
-                "disruption_text":  session.disruption_text,
-                "delay_recovered":  round(session.delay_recovered_min, 1),
-                "energy_saved":     round(session.energy_saved_kwh, 0),
-                "outer_waits":      round(session.outer_waits_averted, 1),
-                "trains":           session.trains,
-                "alerts":           session.alerts,
-                "logs":             session.logs,
-            }
+            payload = _get_telemetry_payload()
             await ws.send_json(payload)
             await asyncio.sleep(0.5)
     except WebSocketDisconnect:
@@ -626,7 +672,7 @@ def remove_train(req: RemoveRequest):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# FRONTEND DASHBOARD — CRYSTAL-CLEAR OUTPUT DIRECTIVES EDITION
+# FRONTEND DASHBOARD — MULTI-AGENT SYSTEM (MAS) EDITION
 # ──────────────────────────────────────────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse)
 async def dashboard():
@@ -658,7 +704,7 @@ async def dashboard():
     .pulse-ring { animation: pulse 1.4s cubic-bezier(0,0,0.2,1) infinite; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
     .glow-box-cyan { box-shadow: 0 0 25px -5px rgba(6, 182, 212, 0.15); }
-    .glow-box-emerald { box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.15); }
+    .glow-box-indigo { box-shadow: 0 0 25px -5px rgba(99, 102, 241, 0.2); }
   </style>
 </head>
 <body class="p-3 lg:p-5 min-h-screen">
@@ -670,10 +716,13 @@ async def dashboard():
     <div>
       <div class="flex items-center gap-2">
         <h1 class="text-lg lg:text-xl font-black tracking-tight text-white mono">
-          IR-ADSS: RAILRESCUE SECTION CONTROL ROOM
+          IR-ADSS: RAILRESCUE MULTI-AGENT CONTROL ROOM
         </h1>
+        <span class="text-[10px] px-2 py-0.5 rounded font-black mono bg-indigo-950 text-indigo-400 border border-indigo-700">
+          DISTRIBUTED MAS
+        </span>
         <span class="text-[10px] px-2 py-0.5 rounded font-black mono bg-cyan-950 text-cyan-400 border border-cyan-700">
-          KAVACH TCAS 3.2
+          KAVACH 3.2
         </span>
       </div>
       <p class="text-xs text-slate-400 mono mt-0.5">
@@ -693,7 +742,7 @@ async def dashboard():
   </div>
 </div>
 
-<!-- ═══════════════ HACKATHON PRESET SCENARIO BAR ═══════════════ -->
+<!-- ═══════════════ HACKATHON PRESET SCENARIO BAR (4 SCENARIOS) ═══════════════ -->
 <div class="bg-gradient-to-r from-slate-900 via-slate-900/90 to-slate-950 border border-cyan-900/40 rounded-xl p-2.5 mb-3 flex flex-wrap items-center justify-between gap-2 shadow-xl">
   <div class="flex items-center gap-2">
     <span class="text-xs font-black text-cyan-400 mono uppercase tracking-wider">🎯 Demo Scenarios:</span>
@@ -708,6 +757,25 @@ async def dashboard():
     <button onclick="loadScenario('zero_wait_demo')" class="px-2.5 py-1 rounded text-xs mono font-bold bg-slate-800 hover:bg-emerald-900/40 text-emerald-300 border border-emerald-800/60 transition">
       3. Outer Signal Zero-Wait Glide
     </button>
+    <button onclick="loadScenario('boundary_rejection_demo')" class="px-2.5 py-1 rounded text-xs mono font-bold bg-slate-800 hover:bg-purple-900/40 text-purple-300 border border-purple-800/60 transition">
+      4. MAS Boundary Rejection: Saturated Station Hold
+    </button>
+  </div>
+</div>
+
+<!-- ═══════════════ LIVE MAS TACTICAL SITUATION & DRIVER DIRECTIVE BANNER ═══════════════ -->
+<div id="meshDirectiveBanner" class="bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-950 border border-indigo-700/60 rounded-xl p-3 mb-3 shadow-xl glow-box-indigo">
+  <div class="flex items-center justify-between flex-wrap gap-2">
+    <div class="flex items-center gap-2">
+      <span class="w-3 h-3 rounded-full bg-cyan-400 animate-ping"></span>
+      <span class="text-xs font-black mono text-cyan-300 uppercase tracking-wider">🌐 Multi-Agent Protocol & Driver Directive Feed:</span>
+    </div>
+    <span id="meshPeersBadge" class="text-[10px] px-2 py-0.5 rounded mono bg-indigo-900/60 text-indigo-200 border border-indigo-700">
+      Mesh Agents: GWL &bull; AGC &bull; JHS &bull; NDLS
+    </span>
+  </div>
+  <div id="meshDirectiveText" class="mt-2 text-xs mono text-white leading-relaxed bg-slate-950/70 p-2.5 rounded-lg border border-indigo-900/40">
+    Autonomous MAS Mesh active. Adjacent Station Agents dynamically negotiating corridor handoffs, 3-way cascades, and platform allocations.
   </div>
 </div>
 
@@ -871,7 +939,8 @@ async def dashboard():
               <th class="pb-2 pr-2">Signal</th>
               <th class="pb-2 pr-2">PF</th>
               <th class="pb-2 pr-2">Dist</th>
-              <th class="pb-2">Safety</th>
+              <th class="pb-2 pr-2">Safety</th>
+              <th class="pb-2">MAS Handoff</th>
             </tr>
           </thead>
           <tbody id="boardBody" class="divide-y divide-slate-800/60 font-medium"></tbody>
@@ -994,6 +1063,21 @@ async function autoResolve() {
   }
 }
 
+async function triggerAgentHandoff(trainId) {
+  const st = document.getElementById("loadStatus");
+  if (st) st.innerText = `Initiating MAS handoff for Train ${trainId}...`;
+  try {
+    const r = await fetch(`/api/mesh/trigger_handoff`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ train_id: trainId })
+    });
+    const d = await r.json();
+    if (st) st.innerText = `MAS Handoff completed for Train ${trainId}.`;
+  } catch(e) {
+    if (st) st.innerText = "Error triggering handoff.";
+  }
+}
 
 async function loadStation() {
   const codeIn = document.getElementById("stCode");
@@ -1005,7 +1089,7 @@ async function loadStation() {
   const btn = document.getElementById("loadBtn");
   const st  = document.getElementById("loadStatus");
   if (btn) { btn.disabled = true; btn.innerText = "Loading..."; }
-  if (st) st.innerText = "Fetching live board...";
+  if (st) st.innerText = "Fetching board...";
 
   try {
     const r = await fetch("/api/load_station", {
@@ -1102,6 +1186,27 @@ function renderDashboard(data) {
   if (zLabel) zLabel.innerText = "Zone: " + (data.station_zone || "IR");
   const pfLab = document.getElementById("pfLabel");
   if (pfLab) pfLab.innerText = (data.station_platforms || 6) + " Platforms";
+
+  // MAS Directive Banner & Peer Network
+  const meshBanner = document.getElementById("meshDirectiveText");
+  if (meshBanner) {
+    if (data.mesh_directive) {
+      const md = data.mesh_directive;
+      const statusColor = md.status === 'REJECTED_HOLD' ? '#f43f5e' : '#22c55e';
+      meshBanner.innerHTML = `
+        <div class="flex items-center justify-between mb-1">
+          <span class="font-black" style="color:${statusColor}">[AGENT HANDOFF: ${md.source} ➔ ${md.target}]</span>
+          <span class="text-slate-400">${md.timestamp}</span>
+        </div>
+        <div class="text-slate-200 font-bold">${md.directive}</div>
+      `;
+    }
+  }
+
+  const peersBadge = document.getElementById("meshPeersBadge");
+  if (peersBadge && data.peers) {
+    peersBadge.innerText = "Mesh Agents: " + data.peers.join(" • ");
+  }
 
   // Metrics
   const mDel = document.getElementById("metricDelay");
@@ -1246,9 +1351,14 @@ function renderDashboard(data) {
             </div>
           </div>
 
-          <!-- Bottom Row: Safety Interlock Badge -->
-          <div class="pt-2 mt-2 border-t border-slate-800/80 flex items-center justify-between">
-            ${riskBadge}
+          <!-- Bottom Row: Safety Interlock Badge & MAS Trigger -->
+          <div class="pt-2 mt-2 border-t border-slate-800/80 flex items-center justify-between gap-2 flex-wrap">
+            <div class="flex items-center gap-2">
+              ${riskBadge}
+              <button onclick="event.stopPropagation(); triggerAgentHandoff('${t.id}')" class="px-2 py-0.5 rounded text-[10px] font-bold mono bg-indigo-900/80 hover:bg-indigo-700 text-indigo-200 border border-indigo-600 transition">
+                ⚡ ➔ Handoff
+              </button>
+            </div>
             <span class="text-[10px] mono text-slate-400">Delay: ${delayBadge(t.delay_min || 0, t.delay_color || '#6b7280')}</span>
           </div>
 
@@ -1285,7 +1395,7 @@ function renderDashboard(data) {
   const tbody = document.getElementById("boardBody");
   if (tbody) {
     if (!data.trains || data.trains.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="11" class="py-6 text-center text-slate-600 mono">No trains loaded.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="12" class="py-6 text-center text-slate-600 mono">No trains loaded.</td></tr>`;
     } else {
       const sorted = [...data.trains].sort((a, b) =>
         (a.priority_rank || 99) - (b.priority_rank || 99) || a.tier - b.tier
@@ -1310,7 +1420,12 @@ function renderDashboard(data) {
           <td class="pr-2 mono text-[10px]"><span class="inline-block w-2 h-2 rounded-full mr-1 ${signalClass(t.signal_aspect)}"></span>${t.signal_aspect||"?"}</td>
           <td class="pr-2 mono font-black text-cyan-400 text-[10px]">PF ${t.allocated_pf||1}</td>
           <td class="pr-2 mono text-[10px] text-slate-400">${((t.dist_remaining||0)/1000).toFixed(1)}km</td>
-          <td class="mono text-[10px] text-emerald-400">${t.risk_status === 'NOMINAL_CLEAR' ? 'PROTECTED' : t.risk_status}</td>
+          <td class="mono text-[10px] text-emerald-400 pr-2">${t.risk_status === 'NOMINAL_CLEAR' ? 'PROTECTED' : t.risk_status}</td>
+          <td>
+            <button onclick="event.stopPropagation(); triggerAgentHandoff('${t.id}')" class="px-2 py-0.5 rounded text-[9px] font-bold mono bg-indigo-900/80 hover:bg-indigo-700 text-indigo-300 border border-indigo-600 transition">
+              ⚡ ➔ Handoff
+            </button>
+          </td>
         </tr>
       `).join("");
     }
@@ -1385,34 +1500,56 @@ function renderDashboard(data) {
   }
 }
 
-// ── AUTO-RECONNECTING WEBSOCKET ──────────────────────────────────────────────
+// ── AUTO-RECONNECTING WEBSOCKET WITH HTTP POLLING FALLBACK ───────────────────
 let ws = null;
+let pollTimer = null;
+
+function startHttpPolling() {
+  if (pollTimer) return;
+  pollTimer = setInterval(async () => {
+    try {
+      const res = await fetch("/api/telemetry");
+      if (res.ok) {
+        const data = await res.json();
+        renderDashboard(data);
+      }
+    } catch(e) {
+      console.warn("HTTP polling error:", e);
+    }
+  }, 1000);
+}
+
 function initWS() {
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-  ws = new WebSocket(`${protocol}//${location.host}/ws/telemetry`);
+  try {
+    ws = new WebSocket(`${protocol}//${location.host}/ws/telemetry`);
 
-  ws.onopen = () => {
-    console.log("WebSocket connected to RailRescue telemetry stream.");
-  };
+    ws.onopen = () => {
+      console.log("WebSocket connected to RailRescue telemetry stream.");
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    };
 
-  ws.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data);
-      renderDashboard(data);
-    } catch(err) {
-      console.error("Dashboard render error:", err);
-    }
-  };
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        renderDashboard(data);
+      } catch(err) {
+        console.error("Dashboard render error:", err);
+      }
+    };
 
-  ws.onclose = () => {
-    const runTag = document.getElementById("runningTag");
-    if (runTag) runTag.innerText = "RECONNECTING...";
-    setTimeout(initWS, 1500);
-  };
+    ws.onclose = () => {
+      startHttpPolling();
+      setTimeout(initWS, 2000);
+    };
 
-  ws.onerror = (err) => {
-    console.warn("WebSocket error:", err);
-  };
+    ws.onerror = (err) => {
+      console.warn("WebSocket error, falling back to HTTP:", err);
+      startHttpPolling();
+    };
+  } catch(e) {
+    startHttpPolling();
+  }
 }
 
 initWS();
@@ -1422,4 +1559,4 @@ initWS();
 
 
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("app:app", host="0.0.0.0", port=PORT, reload=False)
