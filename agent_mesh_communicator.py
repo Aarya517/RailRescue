@@ -253,16 +253,29 @@ class AgentMeshCommunicator:
         }
         self.session.add_single_train(new_train_data)
 
+        # Update tactical situation banner on the receiver node
+        self.last_mesh_directive = {
+            "train_id": req_train.train_id,
+            "status": status,
+            "source": prop.source_station,
+            "target": self.station_code,
+            "platform": assigned_pf if status != "REJECTED_HOLD" else None,
+            "speed": adv_speed,
+            "directive": directive,
+            "timestamp": datetime.now().strftime("%H:%M:%S")
+        }
+        self.handoff_history.insert(0, self.last_mesh_directive)
+
         return HandoffResponse(
             proposal_id=prop.proposal_id,
             status=status,
             source_station=prop.source_station,
             target_station=self.station_code,
             train_id=req_train.train_id,
-            allocated_platform=assigned_pf,
+            allocated_platform=assigned_pf if status != "REJECTED_HOLD" else None,
             agreed_slot_sec=prop.requested_slot_sec,
             advised_speed_kmh=adv_speed,
-            kavach_aspect="CLEAR" if status == "ACCEPTED" else "CAUTION",
+            kavach_aspect="CLEAR" if status == "ACCEPTED" else "DANGER",
             driver_directive=directive,
             reason=reason,
         )
@@ -346,11 +359,14 @@ class AgentMeshCommunicator:
 
         # If target agent is on live network
         if target_url and target_url != self.peers.get(self.station_code):
-            code, resp_data = await AsyncHttpClient.post(f"{target_url}/api/mesh/handoff/propose", proposal.dict(), timeout=3.0)
+            code, resp_data = await AsyncHttpClient.post(f"{target_url}/api/mesh/handoff/propose", proposal.dict(), timeout=3.5)
             if code == 200 and resp_data:
                 handoff_resp = HandoffResponse(**resp_data)
+                self.session._log(f"MAS SUCCESS: Live handshake agreed with Agent-{target_agent} ({target_url}).")
                 self._apply_handoff_result(train, handoff_resp)
                 return handoff_resp
+            else:
+                self.session._log(f"MAS WARNING: Could not reach live Agent-{target_agent} at {target_url} (HTTP {code}). Check Laptop 2 IP & Firewall.")
 
         # Simulated peer response if peer is local/internal
         handoff_resp = self._simulate_peer_consensus(proposal, target_agent)
@@ -488,5 +504,14 @@ def attach_mesh_communicator(app: Any, session: Any, station_code: str) -> Agent
         target = payload.get("target_station")
         resp = await mesh.trigger_handoff(train_id, target)
         return {"success": True, "response": resp.dict() if resp else None}
+
+    @app.post("/api/mesh/ping")
+    async def ping_peer(payload: Dict[str, str]):
+        url = payload.get("url", "").rstrip("/")
+        code, resp = await AsyncHttpClient.post(f"{url}/api/mesh/status", {}, timeout=2.5)
+        if code == 200 and resp:
+            return {"success": True, "message": f"Successfully connected to {resp.get('agent_id', 'Peer Agent')} at {url}!"}
+        return {"success": False, "error": f"Could not reach {url} (HTTP {code}). Check Laptop IP, Wi-Fi, and Windows Firewall."}
+
 
     return mesh
