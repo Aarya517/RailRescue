@@ -770,14 +770,31 @@ async def dashboard():
       <span class="w-3 h-3 rounded-full bg-cyan-400 animate-ping"></span>
       <span class="text-xs font-black mono text-cyan-300 uppercase tracking-wider">🌐 Multi-Agent Protocol & Driver Directive Feed:</span>
     </div>
-    <span id="meshPeersBadge" class="text-[10px] px-2 py-0.5 rounded mono bg-indigo-900/60 text-indigo-200 border border-indigo-700">
-      Mesh Agents: GWL &bull; AGC &bull; JHS &bull; NDLS
-    </span>
+    <div class="flex items-center gap-2">
+      <span id="meshPeersBadge" class="text-[10px] px-2 py-0.5 rounded mono bg-indigo-900/60 text-indigo-200 border border-indigo-700">
+        Mesh Agents: GWL &bull; AGC &bull; JHS &bull; NDLS
+      </span>
+      <button onclick="togglePeerModal()" class="text-[10px] px-2 py-0.5 rounded font-bold mono bg-cyan-900/60 hover:bg-cyan-700 text-cyan-300 border border-cyan-600 transition">
+        🔗 Link Peer Laptop
+      </button>
+    </div>
   </div>
+  
+  <!-- Collapsible Peer Connector -->
+  <div id="peerConnectorBox" class="hidden mt-2.5 p-2.5 bg-slate-950/90 rounded-lg border border-indigo-800/60 flex flex-wrap items-center gap-2">
+    <span class="text-[11px] font-bold text-indigo-300 mono">Connect Another Laptop:</span>
+    <input id="peerStationCode" type="text" placeholder="Station (e.g. AGC)" class="px-2 py-1 bg-slate-900 border border-slate-700 rounded text-xs text-white mono w-28 uppercase">
+    <input id="peerUrl" type="text" placeholder="http://192.168.1.XX:8000" class="px-2 py-1 bg-slate-900 border border-slate-700 rounded text-xs text-white mono flex-1 min-w-44">
+    <button onclick="registerNewPeer()" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-bold mono transition">
+      + Connect Agent
+    </button>
+  </div>
+
   <div id="meshDirectiveText" class="mt-2 text-xs mono text-white leading-relaxed bg-slate-950/70 p-2.5 rounded-lg border border-indigo-900/40">
     Autonomous MAS Mesh active. Adjacent Station Agents dynamically negotiating corridor handoffs, 3-way cascades, and platform allocations.
   </div>
 </div>
+
 
 <!-- ═══════════════ ROI & METRICS IMPACT CARDS ═══════════════ -->
 <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
@@ -1063,6 +1080,36 @@ async function autoResolve() {
   }
 }
 
+function togglePeerModal() {
+  const box = document.getElementById("peerConnectorBox");
+  if (box) box.classList.toggle("hidden");
+}
+
+async function registerNewPeer() {
+  const codeIn = document.getElementById("peerStationCode");
+  const urlIn  = document.getElementById("peerUrl");
+  const code = (codeIn ? codeIn.value : "").trim().toUpperCase();
+  const url  = (urlIn ? urlIn.value : "").trim();
+  if (!code || !url) return alert("Please enter both Station Code (e.g. AGC) and URL (e.g. http://192.168.1.55:8000)");
+  
+  try {
+    const r = await fetch("/api/mesh/peers/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ station_code: code, url: url })
+    });
+    const d = await r.json();
+    if (d.success) {
+      alert(`Connected successfully to Agent-${code} at ${url}!`);
+      togglePeerModal();
+    } else {
+      alert("Error registering peer: " + (d.error || "Unknown error"));
+    }
+  } catch(e) {
+    alert("Network error connecting to peer laptop: " + e.message);
+  }
+}
+
 async function triggerAgentHandoff(trainId) {
   const st = document.getElementById("loadStatus");
   if (st) st.innerText = `Initiating MAS handoff for Train ${trainId}...`;
@@ -1078,6 +1125,7 @@ async function triggerAgentHandoff(trainId) {
     if (st) st.innerText = "Error triggering handoff.";
   }
 }
+
 
 async function loadStation() {
   const codeIn = document.getElementById("stCode");

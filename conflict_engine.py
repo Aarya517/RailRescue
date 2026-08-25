@@ -46,7 +46,7 @@ class ConflictRiskEngine:
             return {
                 "risk_score": 0.0,
                 "status": "NOMINAL_CLEAR",
-                "tti_seconds": float("inf"),
+                "tti_seconds": 9999.0,
                 "recommended_action": {},
                 "consequence": "Trains on separate tracks — no conflict.",
             }
