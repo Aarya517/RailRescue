@@ -1,9 +1,10 @@
 """
 app.py — RailRescue Station Control Room (SCR) & Autonomous Decision Support System (ADSS)
 Distributed Multi-Agent System (MAS) Edition.
+Theme: Clean Warm Beige, Cream Linen, Sandstone & Rich Espresso Brown.
 Features:
-  - Multi-Agent Mesh Protocol (Inter-Station Webhooks, DMAPPC Consensus, 3-Way Cascades)
-  - Multi-Station Ingestion (RailRadar API + 50 Major Stations)
+  - Dynamic Station-Agnostic Multi-Agent Mesh Protocol (Inter-Station Webhooks, DMAPPC Consensus, 3-Way Cascades)
+  - Multi-Station Ingestion (RailRadar API + 50 Major IR Stations)
   - Kavach TCAS Spatiotemporal Conflict Engine with 1-Click Auto-Dispatch Resolution
   - Zero-Delay Dynamic Speed Optimization & Priority Precedence
   - Saturated Station Capacity Rejection (REJECTED_HOLD / 0 km/h Outer Hold)
@@ -110,9 +111,9 @@ class SimulationSession:
         self.disruption_active = False
         self.disruption_text   = "None (Nominal)"
         self.logs: List[str]   = []
-        self.delay_recovered_min = 14.5
-        self.energy_saved_kwh    = 840.0
-        self.outer_waits_averted = 24.0
+        self.delay_recovered_min = 0.0
+        self.energy_saved_kwh    = 0.0
+        self.outer_waits_averted = 0.0
         self._log(f"RailRescue ADSS initialized for Station {self.station_code}. Multi-Agent Mesh active.")
 
     def _log(self, msg: str):
@@ -164,7 +165,7 @@ class SimulationSession:
             "delay_min":      float(data.get("delay_min", 0)),
             "scheduled_arrival_offset_sec": float(data.get("scheduled_arrival_offset_sec", 300.0)),
             "scheduled_arrival_str":        data.get("scheduled_arrival_str", "--:--:--"),
-            "color":          data.get("color", TIER_COLORS.get(int(data.get("tier", 5)), "#94a3b8")),
+            "color":          data.get("color", TIER_COLORS.get(int(data.get("tier", 5)), "#854d0e")),
             "source":         data.get("source", "ORIGIN"),
             "dest":           data.get("dest", self.station_code),
             "status":         "EN_ROUTE",
@@ -173,13 +174,13 @@ class SimulationSession:
             "risk_status":    "NOMINAL_CLEAR",
             "collision_advice": None,
             "signal_aspect":  "CLEAR",
-            "signal_color":   "#22c55e",
+            "signal_color":   "#16a34a",
             "signal_icon":    "🟢",
             "signal_km_from_station": round(dist_m / 1000, 2),
             "signal_reason":  "Section clear",
             "signal_max_speed": float(data.get("mps", 100.0)),
             "delay_status":   "ON_TIME",
-            "delay_color":    "#22c55e",
+            "delay_color":    "#16a34a",
             "advised_speed":  float(data.get("current_speed", 80.0)),
             "action_text":    "On schedule",
             "priority_rank":  99,
@@ -498,7 +499,6 @@ class SimulationSession:
                 t["gps"] = Kinematics.compute_gps(t.get("corridor", "NORTH_CORRIDOR"), float(t.get("dist_remaining", 0.0)), lat0, lon0)
 
 
-
 session = SimulationSession()
 mesh_comm = attach_mesh_communicator(app, session, session.station_code)
 
@@ -579,7 +579,10 @@ def control(action: str):
         session.sim_seconds = 0.0
         session.trains = []
         session.alerts = []
-        session._log("Traffic board cleared.")
+        session.delay_recovered_min = 0.0
+        session.energy_saved_kwh = 0.0
+        session.outer_waits_averted = 0.0
+        session._log("Traffic board and metrics cleared.")
     elif action == "disrupt":
         session.disruption_active = not session.disruption_active
         session.disruption_text = (
@@ -633,7 +636,7 @@ def fetch_and_add(req: SingleTrainRequest):
                     "mass": float(mass), "pax": pax, "delay_min": 1.0,
                     "scheduled_arrival_offset_sec": max(dist_m / (mps / 3.6), 60.0),
                     "scheduled_arrival_str": (datetime.now() + timedelta(seconds=max(dist_m / (mps / 3.6), 60.0))).strftime("%H:%M:%S"),
-                    "color": TIER_COLORS.get(tier, "#94a3b8"),
+                    "color": TIER_COLORS.get(tier, "#854d0e"),
                     "source": str(db.get("source", "ORIGIN")),
                     "dest": session.station_code,
                 }
@@ -656,7 +659,7 @@ def fetch_and_add(req: SingleTrainRequest):
         "mass": float(tmpl["mass"]), "pax": tmpl["pax"], "delay_min": 1.2,
         "scheduled_arrival_offset_sec": max(dist_m / (tmpl["mps"] / 3.6), 60.0),
         "scheduled_arrival_str": (datetime.now() + timedelta(seconds=max(dist_m / (tmpl["mps"] / 3.6), 60.0))).strftime("%H:%M:%S"),
-        "color": TIER_COLORS.get(tmpl["tier"], "#94a3b8"),
+        "color": TIER_COLORS.get(tmpl["tier"], "#854d0e"),
         "source": corr_info.get("neighbor", "ORIGIN"), "dest": session.station_code,
     }
     session.add_single_train(train_data)
@@ -672,7 +675,7 @@ def remove_train(req: RemoveRequest):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# FRONTEND DASHBOARD — MULTI-AGENT SYSTEM (MAS) EDITION
+# FRONTEND DASHBOARD — ELEGANT WARM BEIGE & CLEAN SANDSTONE PALETTE
 # ──────────────────────────────────────────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse)
 async def dashboard():
@@ -683,190 +686,188 @@ async def dashboard():
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>RailRescue — Indian Railways Autonomous Section Control ADSS</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
-    body { font-family: 'Inter', sans-serif; background: #04070c; color: #f1f5f9; }
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f5efe6; color: #2d231a; }
     .mono { font-family: 'JetBrains Mono', monospace; }
     ::-webkit-scrollbar { width: 5px; height: 5px; }
-    ::-webkit-scrollbar-track { background: #0b111a; }
-    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
-    .signal-green  { background: #22c55e; box-shadow: 0 0 12px #22c55e; }
-    .signal-yellow { background: #eab308; box-shadow: 0 0 12px #eab308; }
-    .signal-orange { background: #f97316; box-shadow: 0 0 12px #f97316; }
-    .signal-red    { background: #ef4444; box-shadow: 0 0 14px #ef4444; }
-    .signal-gray   { background: #475569; }
-    .tier-badge-2 { background: #be123c2a; color: #fda4af; border: 1px solid #be123c77; }
-    .tier-badge-4 { background: #0c4a6e2a; color: #7dd3fc; border: 1px solid #0c4a6e77; }
-    .tier-badge-5 { background: #4c1d952a; color: #c4b5fd; border: 1px solid #4c1d9577; }
-    .tier-badge-7 { background: #7c2d122a; color: #fdba74; border: 1px solid #7c2d1277; }
+    ::-webkit-scrollbar-track { background: #ede4d8; }
+    ::-webkit-scrollbar-thumb { background: #c2b09d; border-radius: 3px; }
+    .signal-green  { background: #16a34a; box-shadow: 0 0 10px #16a34a; }
+    .signal-yellow { background: #ca8a04; box-shadow: 0 0 10px #ca8a04; }
+    .signal-orange { background: #ea580c; box-shadow: 0 0 10px #ea580c; }
+    .signal-red    { background: #dc2626; box-shadow: 0 0 12px #dc2626; }
+    .signal-gray   { background: #a89f91; }
+    .tier-badge-2 { background: #fef3c7; color: #92400e; border: 1px solid #f59e0b; }
+    .tier-badge-4 { background: #e0f2fe; color: #0369a1; border: 1px solid #38bdf8; }
+    .tier-badge-5 { background: #f3e8ff; color: #6b21a8; border: 1px solid #c084fc; }
+    .tier-badge-7 { background: #ffedd5; color: #9a3412; border: 1px solid #fb923c; }
     .blink { animation: blink 0.9s step-end infinite; }
     @keyframes blink { 50% { opacity: 0; } }
     .pulse-ring { animation: pulse 1.4s cubic-bezier(0,0,0.2,1) infinite; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
-    .glow-box-cyan { box-shadow: 0 0 25px -5px rgba(6, 182, 212, 0.15); }
-    .glow-box-indigo { box-shadow: 0 0 25px -5px rgba(99, 102, 241, 0.2); }
+    .shadow-beige { box-shadow: 0 4px 20px -2px rgba(120, 80, 40, 0.08); }
   </style>
 </head>
-<body class="p-3 lg:p-5 min-h-screen">
+<body class="p-3 lg:p-6 min-h-screen bg-[#f5efe6]">
 
 <!-- ═══════════════ TOP HEADER & CONTROLS ═══════════════ -->
-<div class="flex flex-wrap items-center justify-between gap-3 pb-3 mb-3 border-b border-slate-800/80">
+<div class="flex flex-wrap items-center justify-between gap-3 pb-3 mb-4 border-b border-[#ded3c5]">
   <div class="flex items-center gap-3">
-    <div class="w-3.5 h-3.5 rounded-full bg-emerald-500 animate-ping"></div>
+    <div class="w-3.5 h-3.5 rounded-full bg-[#854d0e] animate-ping"></div>
     <div>
-      <div class="flex items-center gap-2">
-        <h1 class="text-lg lg:text-xl font-black tracking-tight text-white mono">
+      <div class="flex items-center gap-2 flex-wrap">
+        <h1 class="text-lg lg:text-xl font-black tracking-tight text-[#1e150f] mono">
           IR-ADSS: RAILRESCUE MULTI-AGENT CONTROL ROOM
         </h1>
-        <span class="text-[10px] px-2 py-0.5 rounded font-black mono bg-indigo-950 text-indigo-400 border border-indigo-700">
+        <span class="text-[10px] px-2 py-0.5 rounded font-black mono bg-[#ede3d5] text-[#78350f] border border-[#cbb8a6]">
           DISTRIBUTED MAS
         </span>
-        <span class="text-[10px] px-2 py-0.5 rounded font-black mono bg-cyan-950 text-cyan-400 border border-cyan-700">
+        <span class="text-[10px] px-2 py-0.5 rounded font-black mono bg-[#fee2e2] text-[#991b1b] border border-[#fca5a5]">
           KAVACH 3.2
         </span>
       </div>
-      <p class="text-xs text-slate-400 mono mt-0.5">
-        <span id="stationLabel" class="text-cyan-400 font-bold">GWL — Gwalior Junction</span> &bull;
-        <span id="simDate" class="text-slate-300">--</span> &bull;
-        <span id="simClock" class="text-amber-400 font-black">--:--:-- IST</span> &bull;
-        <span id="zoneLabel" class="text-slate-500">Zone: NCR</span> &bull;
-        <span id="pfLabel" class="text-slate-500">6 Platforms</span>
+      <p class="text-xs text-[#6b5443] mono mt-0.5">
+        <span id="stationLabel" class="text-[#854d0e] font-black">GWL — Gwalior Junction</span> &bull;
+        <span id="simDate" class="text-[#4a3b30]">--</span> &bull;
+        <span id="simClock" class="text-[#b45309] font-black">--:--:-- IST</span> &bull;
+        <span id="zoneLabel" class="text-[#786150]">Zone: NCR</span> &bull;
+        <span id="pfLabel" class="text-[#786150]">6 Platforms</span>
       </p>
     </div>
   </div>
   <div class="flex items-center gap-2 flex-wrap">
-    <button onclick="control('start')"   class="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 rounded font-bold text-xs mono transition shadow-lg">▶ START</button>
-    <button onclick="control('pause')"   class="px-3.5 py-1.5 bg-amber-700   hover:bg-amber-600   rounded font-bold text-xs mono transition">⏸ PAUSE</button>
-    <button onclick="control('reset')"   class="px-3.5 py-1.5 bg-slate-700   hover:bg-slate-600   rounded font-bold text-xs mono transition">↺ CLEAR</button>
-    <button onclick="control('disrupt')" class="px-3.5 py-1.5 bg-rose-800    hover:bg-rose-700    rounded font-bold text-xs mono transition" id="disruptBtn">⚡ INJECT DISRUPTION</button>
+    <button onclick="control('start')"   class="px-3.5 py-1.5 bg-[#15803d] hover:bg-[#166534] text-white rounded font-bold text-xs mono transition shadow-sm">▶ START</button>
+    <button onclick="control('pause')"   class="px-3.5 py-1.5 bg-[#b45309] hover:bg-[#92400e] text-white rounded font-bold text-xs mono transition shadow-sm">⏸ PAUSE</button>
+    <button onclick="control('reset')"   class="px-3.5 py-1.5 bg-[#78716c] hover:bg-[#57534e] text-white rounded font-bold text-xs mono transition shadow-sm">↺ CLEAR</button>
+    <button onclick="control('disrupt')" class="px-3.5 py-1.5 bg-[#b91c1c] hover:bg-[#991b1b] text-white rounded font-bold text-xs mono transition shadow-sm" id="disruptBtn">⚡ INJECT DISRUPTION</button>
   </div>
 </div>
 
 <!-- ═══════════════ HACKATHON PRESET SCENARIO BAR (4 SCENARIOS) ═══════════════ -->
-<div class="bg-gradient-to-r from-slate-900 via-slate-900/90 to-slate-950 border border-cyan-900/40 rounded-xl p-2.5 mb-3 flex flex-wrap items-center justify-between gap-2 shadow-xl">
+<div class="bg-[#faf6f0] border border-[#ded3c5] rounded-xl p-2.5 mb-3 flex flex-wrap items-center justify-between gap-2 shadow-beige">
   <div class="flex items-center gap-2">
-    <span class="text-xs font-black text-cyan-400 mono uppercase tracking-wider">🎯 Demo Scenarios:</span>
+    <span class="text-xs font-black text-[#854d0e] mono uppercase tracking-wider">🎯 Demo Scenarios:</span>
   </div>
   <div class="flex items-center gap-2 flex-wrap">
-    <button onclick="loadScenario('precedence_demo')" class="px-2.5 py-1 rounded text-xs mono font-bold bg-slate-800 hover:bg-cyan-900/40 text-cyan-300 border border-cyan-800/60 transition">
+    <button onclick="loadScenario('precedence_demo')" class="px-2.5 py-1 rounded text-xs mono font-bold bg-[#ede4d8] hover:bg-[#e2d5c5] text-[#2d231a] border border-[#cbb8a6] transition">
       1. Precedence: Rajdhani over Express
     </button>
-    <button onclick="loadScenario('kavach_collision_demo')" class="px-2.5 py-1 rounded text-xs mono font-bold bg-slate-800 hover:bg-rose-900/40 text-rose-300 border border-rose-800/60 transition">
+    <button onclick="loadScenario('kavach_collision_demo')" class="px-2.5 py-1 rounded text-xs mono font-bold bg-[#ede4d8] hover:bg-[#fee2e2] text-[#991b1b] border border-[#fca5a5] transition">
       2. Kavach Rear-End Anti-Collision
     </button>
-    <button onclick="loadScenario('zero_wait_demo')" class="px-2.5 py-1 rounded text-xs mono font-bold bg-slate-800 hover:bg-emerald-900/40 text-emerald-300 border border-emerald-800/60 transition">
+    <button onclick="loadScenario('zero_wait_demo')" class="px-2.5 py-1 rounded text-xs mono font-bold bg-[#ede4d8] hover:bg-[#fef3c7] text-[#854d0e] border border-[#fcd34d] transition">
       3. Outer Signal Zero-Wait Glide
     </button>
-    <button onclick="loadScenario('boundary_rejection_demo')" class="px-2.5 py-1 rounded text-xs mono font-bold bg-slate-800 hover:bg-purple-900/40 text-purple-300 border border-purple-800/60 transition">
+    <button onclick="loadScenario('boundary_rejection_demo')" class="px-2.5 py-1 rounded text-xs mono font-bold bg-[#ede4d8] hover:bg-[#f3e8ff] text-[#6b21a8] border border-[#d8b4fe] transition">
       4. MAS Boundary Rejection: Saturated Station Hold
     </button>
   </div>
 </div>
 
 <!-- ═══════════════ LIVE MAS TACTICAL SITUATION & DRIVER DIRECTIVE BANNER ═══════════════ -->
-<div id="meshDirectiveBanner" class="bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-950 border border-indigo-700/60 rounded-xl p-3 mb-3 shadow-xl glow-box-indigo">
+<div id="meshDirectiveBanner" class="bg-gradient-to-r from-[#ebdcd0] via-[#f7eee6] to-[#ebdcd0] border border-[#cdb9a5] rounded-xl p-3 mb-3 shadow-beige">
   <div class="flex items-center justify-between flex-wrap gap-2">
     <div class="flex items-center gap-2">
-      <span class="w-3 h-3 rounded-full bg-cyan-400 animate-ping"></span>
-      <span class="text-xs font-black mono text-cyan-300 uppercase tracking-wider">🌐 Multi-Agent Protocol & Driver Directive Feed:</span>
+      <span class="w-3 h-3 rounded-full bg-[#854d0e] animate-ping"></span>
+      <span class="text-xs font-black mono text-[#2d231a] uppercase tracking-wider">🌐 Multi-Agent Protocol & Driver Directive Feed:</span>
     </div>
     <div class="flex items-center gap-2">
-      <span id="meshPeersBadge" class="text-[10px] px-2 py-0.5 rounded mono bg-indigo-900/60 text-indigo-200 border border-indigo-700">
+      <span id="meshPeersBadge" class="text-[10px] px-2 py-0.5 rounded mono bg-[#faf6f0] text-[#78350f] border border-[#cbb8a6]">
         Mesh Agents: GWL &bull; AGC &bull; JHS &bull; NDLS
       </span>
-      <button onclick="togglePeerModal()" class="text-[10px] px-2 py-0.5 rounded font-bold mono bg-cyan-900/60 hover:bg-cyan-700 text-cyan-300 border border-cyan-600 transition">
+      <button onclick="togglePeerModal()" class="text-[10px] px-2 py-0.5 rounded font-bold mono bg-[#854d0e] hover:bg-[#a16207] text-white transition">
         🔗 Link Peer Laptop
       </button>
     </div>
   </div>
   
   <!-- Collapsible Peer Connector -->
-  <div id="peerConnectorBox" class="hidden mt-2.5 p-2.5 bg-slate-950/90 rounded-lg border border-indigo-800/60 flex flex-wrap items-center gap-2">
-    <span class="text-[11px] font-bold text-indigo-300 mono">Connect Another Laptop:</span>
-    <input id="peerStationCode" type="text" placeholder="Station (e.g. AGC)" class="px-2 py-1 bg-slate-900 border border-slate-700 rounded text-xs text-white mono w-28 uppercase">
-    <input id="peerUrl" type="text" placeholder="http://192.168.1.XX:8000" class="px-2 py-1 bg-slate-900 border border-slate-700 rounded text-xs text-white mono flex-1 min-w-44">
-    <button onclick="registerNewPeer()" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-bold mono transition">
+  <div id="peerConnectorBox" class="hidden mt-2.5 p-2.5 bg-[#faf6f0] rounded-lg border border-[#cbb8a6] flex flex-wrap items-center gap-2">
+    <span class="text-[11px] font-bold text-[#78350f] mono">Connect Another Laptop:</span>
+    <input id="peerStationCode" type="text" placeholder="Station (e.g. AGC)" class="px-2 py-1 bg-white border border-[#cbb8a6] rounded text-xs text-[#2d231a] mono w-28 uppercase">
+    <input id="peerUrl" type="text" placeholder="http://192.168.1.XX:8000" class="px-2 py-1 bg-white border border-[#cbb8a6] rounded text-xs text-[#2d231a] mono flex-1 min-w-44">
+    <button onclick="registerNewPeer()" class="px-3 py-1 bg-[#854d0e] hover:bg-[#a16207] text-white rounded text-xs font-bold mono transition">
       + Connect Agent
     </button>
   </div>
 
-  <div id="meshDirectiveText" class="mt-2 text-xs mono text-white leading-relaxed bg-slate-950/70 p-2.5 rounded-lg border border-indigo-900/40">
+  <div id="meshDirectiveText" class="mt-2 text-xs mono text-[#2d231a] leading-relaxed bg-[#faf6f0] p-2.5 rounded-lg border border-[#d8c7b5]">
     Autonomous MAS Mesh active. Adjacent Station Agents dynamically negotiating corridor handoffs, 3-way cascades, and platform allocations.
   </div>
 </div>
 
-
 <!-- ═══════════════ ROI & METRICS IMPACT CARDS ═══════════════ -->
 <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-  <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 flex items-center gap-3">
-    <div class="w-8 h-8 rounded-lg bg-emerald-950 border border-emerald-700 flex items-center justify-center text-lg">⏱️</div>
+  <div class="bg-[#faf6f0] border border-[#ded3c5] rounded-xl p-2.5 flex items-center gap-3 shadow-beige">
+    <div class="w-8 h-8 rounded-lg bg-[#dcfce7] border border-[#86efac] flex items-center justify-center text-lg">⏱️</div>
     <div>
-      <div class="text-[10px] text-slate-400 mono uppercase font-bold">Delay Recovered</div>
-      <div class="text-base font-black mono text-emerald-400" id="metricDelay">+14.5 min</div>
+      <div class="text-[10px] text-[#6b5443] mono uppercase font-bold">Delay Recovered</div>
+      <div class="text-base font-black mono text-[#15803d]" id="metricDelay">+14.5 min</div>
     </div>
   </div>
-  <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 flex items-center gap-3">
-    <div class="w-8 h-8 rounded-lg bg-cyan-950 border border-cyan-700 flex items-center justify-center text-lg">⚡</div>
+  <div class="bg-[#faf6f0] border border-[#ded3c5] rounded-xl p-2.5 flex items-center gap-3 shadow-beige">
+    <div class="w-8 h-8 rounded-lg bg-[#fef3c7] border border-[#fde047] flex items-center justify-center text-lg">⚡</div>
     <div>
-      <div class="text-[10px] text-slate-400 mono uppercase font-bold">Traction Energy Saved</div>
-      <div class="text-base font-black mono text-cyan-400" id="metricEnergy">840 kWh</div>
+      <div class="text-[10px] text-[#6b5443] mono uppercase font-bold">Traction Energy Saved</div>
+      <div class="text-base font-black mono text-[#b45309]" id="metricEnergy">840 kWh</div>
     </div>
   </div>
-  <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 flex items-center gap-3">
-    <div class="w-8 h-8 rounded-lg bg-amber-950 border border-amber-700 flex items-center justify-center text-lg">🛑</div>
+  <div class="bg-[#faf6f0] border border-[#ded3c5] rounded-xl p-2.5 flex items-center gap-3 shadow-beige">
+    <div class="w-8 h-8 rounded-lg bg-[#ffedd5] border border-[#fdba74] flex items-center justify-center text-lg">🛑</div>
     <div>
-      <div class="text-[10px] text-slate-400 mono uppercase font-bold">Outer Signal Idling Averted</div>
-      <div class="text-base font-black mono text-amber-400" id="metricOuter">24.0 min</div>
+      <div class="text-[10px] text-[#6b5443] mono uppercase font-bold">Outer Signal Idling Averted</div>
+      <div class="text-base font-black mono text-[#c2410c]" id="metricOuter">24.0 min</div>
     </div>
   </div>
-  <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 flex items-center gap-3">
-    <div class="w-8 h-8 rounded-lg bg-purple-950 border border-purple-700 flex items-center justify-center text-lg">🛡️</div>
+  <div class="bg-[#faf6f0] border border-[#ded3c5] rounded-xl p-2.5 flex items-center gap-3 shadow-beige">
+    <div class="w-8 h-8 rounded-lg bg-[#f3e8ff] border border-[#d8b4fe] flex items-center justify-center text-lg">🛡️</div>
     <div>
-      <div class="text-[10px] text-slate-400 mono uppercase font-bold">Kavach Safety Index</div>
-      <div class="text-base font-black mono text-purple-400">100% Protected</div>
+      <div class="text-[10px] text-[#6b5443] mono uppercase font-bold">Kavach Safety Index</div>
+      <div class="text-base font-black mono text-[#6b21a8]">100% Protected</div>
     </div>
   </div>
 </div>
 
 <!-- ═══════════════ STATION LOADER & SEARCH ═══════════════ -->
-<div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3 mb-3">
+<div class="bg-[#faf6f0] border border-[#ded3c5] rounded-xl p-3 mb-3 shadow-beige">
   <div class="flex flex-wrap gap-2 items-end">
     <div class="flex-1 min-w-36">
-      <label class="text-xs text-slate-400 mono block mb-1">Station Code (50 IR Stations)</label>
+      <label class="text-xs text-[#6b5443] mono block mb-1 font-bold">Station Code (50 IR Stations)</label>
       <input id="stCode" type="text" value="GWL" placeholder="GWL / NDLS / BCT / MAS / JBP..."
-             class="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded text-sm text-white mono font-bold focus:border-cyan-500 focus:outline-none uppercase"
+             class="w-full px-3 py-1.5 bg-white border border-[#cbb8a6] rounded text-sm text-[#1e150f] mono font-bold focus:border-[#854d0e] focus:outline-none uppercase"
              onkeydown="if(event.key==='Enter')loadStation()">
     </div>
     <div class="flex-1 min-w-44">
-      <label class="text-xs text-slate-400 mono block mb-1">RailRadar API Key (Optional)</label>
+      <label class="text-xs text-[#6b5443] mono block mb-1 font-bold">RailRadar API Key (Optional)</label>
       <input id="stApiKey" type="password" placeholder="Paste API Key for Live NTES Data"
-             class="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded text-sm text-white mono focus:border-cyan-500 focus:outline-none">
+             class="w-full px-3 py-1.5 bg-white border border-[#cbb8a6] rounded text-sm text-[#1e150f] mono focus:border-[#854d0e] focus:outline-none">
     </div>
     <button onclick="loadStation()" id="loadBtn"
-            class="px-4 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded font-black text-xs mono transition shadow-md">
+            class="px-4 py-1.5 bg-[#854d0e] hover:bg-[#a16207] text-white rounded font-black text-xs mono transition shadow-sm">
       🚉 Load Station Board
     </button>
     <div class="flex-1 min-w-36">
-      <label class="text-xs text-slate-400 mono block mb-1">Inject Single Train</label>
+      <label class="text-xs text-[#6b5443] mono block mb-1 font-bold">Inject Single Train</label>
       <div class="flex gap-1">
         <input id="singleTrain" type="text" placeholder="Train No. (e.g. 12952)"
-               class="flex-1 px-2 py-1.5 bg-slate-950 border border-slate-700 rounded text-xs text-white mono focus:border-indigo-500 focus:outline-none">
+               class="flex-1 px-2 py-1.5 bg-white border border-[#cbb8a6] rounded text-xs text-[#1e150f] mono focus:border-[#854d0e] focus:outline-none">
         <button onclick="addSingleTrain()"
-                class="px-3 py-1.5 bg-indigo-700 hover:bg-indigo-600 rounded text-xs font-bold mono">+ Add</button>
+                class="px-3 py-1.5 bg-[#57534e] hover:bg-[#44403c] text-white rounded text-xs font-bold mono">+ Add</button>
       </div>
     </div>
-    <span id="loadStatus" class="text-xs text-slate-400 mono self-center"></span>
+    <span id="loadStatus" class="text-xs text-[#6b5443] mono self-center font-semibold"></span>
   </div>
 </div>
 
 <!-- ═══════════════ KAVACH CONFLICT & ADSS ACTION BANNER ═══════════════ -->
-<div id="alertBanner" class="hidden mb-3 bg-rose-950/90 border border-rose-600 rounded-xl p-3 shadow-2xl">
+<div id="alertBanner" class="hidden mb-3 bg-[#fee2e2] border border-[#ef4444] rounded-xl p-3 shadow-md">
   <div class="flex items-start justify-between gap-3 flex-wrap">
     <div class="flex items-start gap-3 flex-1">
       <span class="text-2xl blink">🚨</span>
-      <div id="alertContent" class="text-xs text-rose-200 mono space-y-1"></div>
+      <div id="alertContent" class="text-xs text-[#991b1b] mono space-y-1"></div>
     </div>
-    <button onclick="autoResolve()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-black text-xs mono shadow-lg flex items-center gap-1.5 shrink-0 transition">
+    <button onclick="autoResolve()" class="px-4 py-2 bg-[#15803d] hover:bg-[#166534] text-white rounded-lg font-black text-xs mono shadow flex items-center gap-1.5 shrink-0 transition">
       🛡️ Apply ADSS Auto-Dispatch
     </button>
   </div>
@@ -875,23 +876,23 @@ async def dashboard():
 <!-- ═══════════════════════════════════════════════════════════════════════════ -->
 <!-- 📢 PRIMARY OUTPUT: AUTONOMOUS SECTION DIRECTIVES & TRAIN COMMAND CARDS     -->
 <!-- ═══════════════════════════════════════════════════════════════════════════ -->
-<div class="bg-slate-900 border border-cyan-800/40 rounded-xl p-4 mb-4 shadow-2xl glow-box-cyan">
-  <div class="flex flex-wrap justify-between items-center pb-2 mb-3 border-b border-slate-800">
+<div class="bg-[#faf6f0] border border-[#ded3c5] rounded-xl p-4 mb-4 shadow-beige">
+  <div class="flex flex-wrap justify-between items-center pb-2 mb-3 border-b border-[#ded3c5]">
     <div class="flex items-center gap-2">
       <span class="text-lg">📢</span>
-      <h2 class="text-sm font-black tracking-wider text-cyan-300 uppercase mono">
+      <h2 class="text-sm font-black tracking-wider text-[#78350f] uppercase mono">
         ACTIVE SECTION CONTROL DIRECTIVES & TRAIN OUTPUT COMMANDS
       </h2>
     </div>
-    <div class="text-xs mono text-slate-400">
-      Controlled by: <span id="directiveStationName" class="text-white font-bold">Gwalior Junction</span> &bull;
-      Total Inbound: <span id="directiveTrainCount" class="text-cyan-400 font-black">0</span> Trains
+    <div class="text-xs mono text-[#6b5443]">
+      Controlled by: <span id="directiveStationName" class="text-[#1e150f] font-black">Gwalior Junction</span> &bull;
+      Total Inbound: <span id="directiveTrainCount" class="text-[#b45309] font-black">0</span> Trains
     </div>
   </div>
 
   <!-- Directives Container Grid -->
   <div id="directivesGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-    <div class="col-span-full py-8 text-center text-slate-500 mono text-sm">
+    <div class="col-span-full py-8 text-center text-[#8c7664] mono text-sm font-medium">
       Enter a station code above and click "Load Station Board" or select a Scenario to view active directions.
     </div>
   </div>
@@ -903,49 +904,31 @@ async def dashboard():
   <!-- ─── LEFT: LIVE TRACK & PLATFORM INTERLOCKING DIAGRAM (7 COLS) ─── -->
   <div class="col-span-12 xl:col-span-7 space-y-3">
     
-    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-2xl">
+    <div class="bg-[#faf6f0] border border-[#ded3c5] rounded-xl p-4 shadow-beige">
       <div class="flex justify-between items-center mb-2">
-        <span class="text-xs font-bold text-slate-400 tracking-widest mono uppercase">
-          Live Track & Interlocking Block Diagram &mdash; <span id="mapStationName" class="text-cyan-400">GWL</span>
+        <span class="text-xs font-bold text-[#6b5443] tracking-widest mono uppercase">
+          Live Track & Interlocking Block Diagram &mdash; <span id="mapStationName" class="text-[#854d0e] font-black">GWL</span>
         </span>
-        <span id="disruptionTag" class="text-[10px] px-2 py-0.5 rounded mono bg-emerald-950 text-emerald-400 border border-emerald-800">Nominal Operations</span>
+        <span id="disruptionTag" class="text-[10px] px-2 py-0.5 rounded mono bg-[#dcfce7] text-[#15803d] border border-[#86efac] font-bold">Nominal Operations</span>
       </div>
-      <svg id="trackSvg" viewBox="0 0 880 260" class="w-full bg-slate-950 rounded-lg border border-slate-800">
-        <!-- Corridors with signal lights -->
-        <line x1="40"  y1="50"  x2="260" y2="110" stroke="#1e293b" stroke-width="4"/>
-        <text x="8"   y="48"   fill="#64748b" font-size="9" class="mono font-bold">NORTH (UP)</text>
-        <circle cx="230" cy="100" r="4" fill="#22c55e" id="sig_N"/>
-
-        <line x1="40"  y1="210" x2="260" y2="150" stroke="#1e293b" stroke-width="4"/>
-        <text x="8"   y="222"  fill="#64748b" font-size="9" class="mono font-bold">SOUTH (DN)</text>
-        <circle cx="230" cy="160" r="4" fill="#22c55e" id="sig_S"/>
-
-        <line x1="40"  y1="110" x2="260" y2="120" stroke="#334155" stroke-width="2" stroke-dasharray="5"/>
-        <text x="8"   y="108"  fill="#475569" font-size="8" class="mono">EAST BR.</text>
-
-        <line x1="40"  y1="150" x2="260" y2="140" stroke="#334155" stroke-width="2" stroke-dasharray="5"/>
-        <text x="8"   y="165"  fill="#475569" font-size="8" class="mono">WEST BR.</text>
-
-        <!-- Dynamic Platform lines -->
+      <svg id="trackSvg" viewBox="0 0 880 260" class="w-full bg-[#ede5d8] rounded-lg border border-[#cbb8a6]">
         <g id="platformLines"></g>
-        <line x1="620" y1="130" x2="840" y2="130" stroke="#1e293b" stroke-width="4"/>
-        <text x="730" y="122" fill="#64748b" font-size="9" class="mono font-bold">DEPARTURE TRUNK</text>
         <g id="trainSvgContainer"></g>
       </svg>
     </div>
 
     <!-- Tabular Priority Traffic Board -->
-    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-2xl">
+    <div class="bg-[#faf6f0] border border-[#ded3c5] rounded-xl p-4 shadow-beige">
       <div class="flex justify-between items-center mb-2">
-        <span class="text-xs font-black text-slate-400 tracking-widest mono uppercase">
+        <span class="text-xs font-black text-[#6b5443] tracking-widest mono uppercase">
           Priority Traffic Precedence Table
         </span>
-        <span id="runningTag" class="text-[10px] px-2 py-0.5 rounded mono bg-slate-800 text-slate-400 border border-slate-700">STANDBY</span>
+        <span id="runningTag" class="text-[10px] px-2 py-0.5 rounded mono bg-[#ede4d8] text-[#6b5443] border border-[#cbb8a6]">STANDBY</span>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-left text-xs">
           <thead>
-            <tr class="text-[10px] text-slate-500 border-b border-slate-800 mono">
+            <tr class="text-[10px] text-[#8c7664] border-b border-[#ded3c5] mono font-bold">
               <th class="pb-2 pr-2">#</th>
               <th class="pb-2 pr-3">Train</th>
               <th class="pb-2 pr-2">Corridor</th>
@@ -960,7 +943,7 @@ async def dashboard():
               <th class="pb-2">MAS Handoff</th>
             </tr>
           </thead>
-          <tbody id="boardBody" class="divide-y divide-slate-800/60 font-medium"></tbody>
+          <tbody id="boardBody" class="divide-y divide-[#ede4d8] font-medium"></tbody>
         </table>
       </div>
     </div>
@@ -971,53 +954,53 @@ async def dashboard():
   <div class="col-span-12 xl:col-span-5 space-y-3">
 
     <!-- LOCO-PILOT CAB HUD (DMI) -->
-    <div class="bg-gradient-to-b from-slate-900 to-slate-950 border border-cyan-800/40 rounded-xl p-4 shadow-2xl relative overflow-hidden">
+    <div class="bg-gradient-to-b from-[#faf6f0] to-[#ede4d8] border border-[#ded3c5] rounded-xl p-4 shadow-beige relative overflow-hidden">
       <div class="flex justify-between items-center mb-3">
-        <span class="text-xs font-black text-cyan-400 tracking-widest mono uppercase flex items-center gap-1.5">
+        <span class="text-xs font-black text-[#78350f] tracking-widest mono uppercase flex items-center gap-1.5">
           <span>🚂 IN-CAB LOCO PILOT HUD (DMI)</span>
         </span>
-        <span class="text-[10px] px-2 py-0.5 rounded mono bg-cyan-950 text-cyan-300 border border-cyan-700 font-bold" id="hudTrainNo">
+        <span class="text-[10px] px-2 py-0.5 rounded mono bg-[#ede4d8] text-[#854d0e] border border-[#cbb8a6] font-bold" id="hudTrainNo">
           Select a Train Card
         </span>
       </div>
 
       <div class="grid grid-cols-2 gap-3 mb-3">
-        <div class="bg-slate-950/80 p-3 rounded-lg border border-slate-800 text-center">
-          <div class="text-[10px] text-slate-400 mono uppercase font-bold">Current Speed</div>
-          <div class="text-2xl font-black mono text-cyan-300 mt-1" id="hudCurSpeed">-- <span class="text-xs text-slate-400 font-normal">km/h</span></div>
-          <div class="text-[10px] text-emerald-400 mono mt-1 font-bold">Advised: <span id="hudAdvSpeed">-- km/h</span></div>
+        <div class="bg-white p-3 rounded-lg border border-[#ded3c5] text-center shadow-sm">
+          <div class="text-[10px] text-[#6b5443] mono uppercase font-bold">Current Speed</div>
+          <div class="text-2xl font-black mono text-[#1e150f] mt-1" id="hudCurSpeed">-- <span class="text-xs text-[#8c7664] font-normal">km/h</span></div>
+          <div class="text-[10px] text-[#15803d] mono mt-1 font-bold">Advised: <span id="hudAdvSpeed">-- km/h</span></div>
         </div>
-        <div class="bg-slate-950/80 p-3 rounded-lg border border-slate-800 text-center flex flex-col justify-center items-center">
-          <div class="text-[10px] text-slate-400 mono uppercase font-bold mb-1">Cab Signal Aspect</div>
+        <div class="bg-white p-3 rounded-lg border border-[#ded3c5] text-center flex flex-col justify-center items-center shadow-sm">
+          <div class="text-[10px] text-[#6b5443] mono uppercase font-bold mb-1">Cab Signal Aspect</div>
           <div class="w-7 h-7 rounded-full flex items-center justify-center signal-green" id="hudSignalBall"></div>
-          <div class="text-[11px] font-black mono text-emerald-400 mt-1" id="hudSignalText">CLEAR</div>
+          <div class="text-[11px] font-black mono text-[#15803d] mt-1" id="hudSignalText">CLEAR</div>
         </div>
       </div>
 
-      <div class="bg-slate-950/80 p-2.5 rounded-lg border border-slate-800 text-xs mono space-y-1.5">
+      <div class="bg-white p-2.5 rounded-lg border border-[#ded3c5] text-xs mono space-y-1.5 shadow-sm">
         <div class="flex justify-between">
-          <span class="text-slate-400">Target Distance:</span>
-          <span class="font-bold text-white" id="hudDist">-- km</span>
+          <span class="text-[#6b5443]">Target Distance:</span>
+          <span class="font-bold text-[#1e150f]" id="hudDist">-- km</span>
         </div>
         <div class="flex justify-between">
-          <span class="text-slate-400">Target Platform:</span>
-          <span class="font-bold text-cyan-400" id="hudPF">Platform --</span>
+          <span class="text-[#6b5443]">Target Platform:</span>
+          <span class="font-bold text-[#854d0e]" id="hudPF">Platform --</span>
         </div>
-        <div class="pt-1 border-t border-slate-800/80 text-[11px] text-amber-300 leading-tight" id="hudAdvice">
+        <div class="pt-1 border-t border-[#ded3c5] text-[11px] text-[#78350f] leading-tight" id="hudAdvice">
           Select any train above to inspect real-time in-cab throttle recommendations.
         </div>
       </div>
     </div>
 
     <!-- Official COA Controller Diary / Live Transmissions Stream -->
-    <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5 flex flex-col shadow-xl" style="height:320px">
+    <div class="bg-[#faf6f0] border border-[#ded3c5] rounded-xl p-3.5 flex flex-col shadow-beige" style="height:320px">
       <div class="flex justify-between items-center mb-2">
-        <h2 class="text-xs font-black text-slate-400 tracking-widest mono uppercase">
+        <h2 class="text-xs font-black text-[#6b5443] tracking-widest mono uppercase">
           Section Controller Transmission Diary
         </h2>
-        <span class="text-[9px] px-1.5 py-0.5 rounded mono bg-slate-800 text-slate-400">COA v4.2</span>
+        <span class="text-[9px] px-1.5 py-0.5 rounded mono bg-[#ede4d8] text-[#6b5443]">COA v4.2</span>
       </div>
-      <div id="agentLog" class="flex-1 bg-slate-950 p-2.5 rounded-lg border border-slate-800 overflow-y-auto mono text-[10px] text-slate-300 space-y-1"></div>
+      <div id="agentLog" class="flex-1 bg-white p-2.5 rounded-lg border border-[#ded3c5] overflow-y-auto mono text-[10px] text-[#2d231a] space-y-1"></div>
     </div>
 
   </div>
@@ -1126,7 +1109,6 @@ async function triggerAgentHandoff(trainId) {
   }
 }
 
-
 async function loadStation() {
   const codeIn = document.getElementById("stCode");
   const code   = (codeIn ? codeIn.value : "").trim().toUpperCase() || "GWL";
@@ -1207,7 +1189,7 @@ function tierLabel(tier) {
 
 function delayBadge(delayMin, color) {
   const sign = delayMin > 0 ? "+" : "";
-  return `<span class="px-1.5 py-0.5 rounded text-[10px] font-black mono" style="background:${color}22;color:${color};border:1px solid ${color}44">
+  return `<span class="px-1.5 py-0.5 rounded text-[10px] font-black mono" style="background:#ede4d8;color:#78350f;border:1px solid #cbb8a6">
             ${sign}${delayMin.toFixed(1)} min
           </span>`;
 }
@@ -1240,13 +1222,13 @@ function renderDashboard(data) {
   if (meshBanner) {
     if (data.mesh_directive) {
       const md = data.mesh_directive;
-      const statusColor = md.status === 'REJECTED_HOLD' ? '#f43f5e' : '#22c55e';
+      const statusColor = md.status === 'REJECTED_HOLD' ? '#b91c1c' : '#15803d';
       meshBanner.innerHTML = `
-        <div class="flex items-center justify-between mb-1">
+        <div class="flex items-center justify-between mb-1 flex-wrap gap-1">
           <span class="font-black" style="color:${statusColor}">[AGENT HANDOFF: ${md.source} ➔ ${md.target}]</span>
-          <span class="text-slate-400">${md.timestamp}</span>
+          <span class="text-[#6b5443]">${md.timestamp}</span>
         </div>
-        <div class="text-slate-200 font-bold">${md.directive}</div>
+        <div class="text-[#1e150f] font-bold">${md.directive}</div>
       `;
     }
   }
@@ -1269,16 +1251,16 @@ function renderDashboard(data) {
   if (runTag) {
     runTag.innerText = data.is_running ? "● LIVE ACTIVE" : "⏸ PAUSED";
     runTag.className = data.is_running
-      ? "text-[10px] px-2 py-0.5 rounded mono bg-emerald-950 text-emerald-400 border border-emerald-700 shadow-sm"
-      : "text-[10px] px-2 py-0.5 rounded mono bg-slate-800 text-slate-400 border border-slate-700";
+      ? "text-[10px] px-2 py-0.5 rounded mono bg-[#dcfce7] text-[#15803d] border border-[#86efac] shadow-sm font-bold"
+      : "text-[10px] px-2 py-0.5 rounded mono bg-[#ede4d8] text-[#6b5443] border border-[#cbb8a6]";
   }
 
   const dtag = document.getElementById("disruptionTag");
   if (dtag) {
     dtag.innerText = data.disruption_active ? data.disruption_text : "Nominal Operations";
     dtag.className = data.disruption_active
-      ? "text-[10px] px-2 py-0.5 rounded mono bg-rose-950 text-rose-400 border border-rose-700 blink"
-      : "text-[10px] px-2 py-0.5 rounded mono bg-emerald-950 text-emerald-400 border border-emerald-800";
+      ? "text-[10px] px-2 py-0.5 rounded mono bg-[#fee2e2] text-[#991b1b] border border-[#fca5a5] blink font-bold"
+      : "text-[10px] px-2 py-0.5 rounded mono bg-[#dcfce7] text-[#15803d] border border-[#86efac] font-bold";
   }
 
   const dBtn = document.getElementById("disruptBtn");
@@ -1293,16 +1275,16 @@ function renderDashboard(data) {
       alertBanner.classList.remove("hidden");
       alertContent.innerHTML = critAlerts.map(a => `
         <div class="flex flex-col gap-0.5">
-          <span class="font-black text-rose-300">
+          <span class="font-black text-[#991b1b]">
             ${a.status === "HARD_INTERLOCK_VIOLATION" ? "🚨 KAVACH HARD INTERLOCK" : "⚠️ CRITICAL CONFLICT"}
             — Trains <b>${a.lead_id}</b> &amp; <b>${a.trail_id}</b>
           </span>
-          <span class="text-rose-400">${a.consequence || ""}</span>
+          <span class="text-[#b91c1c]">${a.consequence || ""}</span>
           ${Object.entries(a.recommended_action || {}).map(([id, cmd]) =>
-            `<span class="text-amber-300">→ <b>Train ${id}</b>: ${cmd}</span>`
+            `<span class="text-[#92400e]">→ <b>Train ${id}</b>: ${cmd}</span>`
           ).join("")}
         </div>
-      `).join('<div class="border-t border-rose-800/50 my-1"></div>');
+      `).join('<div class="border-t border-[#fca5a5] my-1"></div>');
     } else {
       alertBanner.classList.add("hidden");
     }
@@ -1313,7 +1295,7 @@ function renderDashboard(data) {
   if (dGrid) {
     if (!data.trains || data.trains.length === 0) {
       dGrid.innerHTML = `
-        <div class="col-span-full py-8 text-center text-slate-500 mono text-sm">
+        <div class="col-span-full py-8 text-center text-[#8c7664] mono text-sm font-semibold">
           No trains active in section. Enter a station code or pick a scenario above.
         </div>`;
     } else {
@@ -1327,7 +1309,7 @@ function renderDashboard(data) {
 
       dGrid.innerHTML = sorted.map(t => {
         const isSel = (t.id === selectedTrainId);
-        const cardBorder = isSel ? "border-cyan-400 ring-2 ring-cyan-500/20 bg-slate-900" : "border-slate-800 bg-slate-950/70 hover:border-slate-700";
+        const cardBorder = isSel ? "border-[#854d0e] ring-2 ring-[#854d0e]/30 bg-white" : "border-[#ded3c5] bg-[#faf6f0] hover:border-[#cbb8a6]";
         
         const distKm = ((t.dist_remaining || 0) / 1000).toFixed(1);
         const speedCmd = t.cmd_title || `RUN AT ${(t.advised_speed || t.mps).toFixed(0)} KM/H`;
@@ -1335,79 +1317,79 @@ function renderDashboard(data) {
         const crossingText = t.crossing || "Cleared for direct approach.";
 
         const riskBadge = t.risk_status === "HARD_INTERLOCK_VIOLATION"
-          ? `<span class="px-2 py-0.5 rounded text-[10px] font-black mono bg-rose-950 text-rose-300 border border-rose-600 blink">🚨 KAVACH BRAKE VIOLATION</span>`
+          ? `<span class="px-2 py-0.5 rounded text-[10px] font-black mono bg-[#fee2e2] text-[#991b1b] border border-[#fca5a5] blink">🚨 KAVACH BRAKE VIOLATION</span>`
           : t.risk_status === "CRITICAL_CONFLICT"
-          ? `<span class="px-2 py-0.5 rounded text-[10px] font-black mono bg-amber-950 text-amber-300 border border-amber-600">⚠️ CONFLICT DETECTED</span>`
-          : `<span class="px-2 py-0.5 rounded text-[10px] font-black mono bg-emerald-950/70 text-emerald-400 border border-emerald-800">🛡️ KAVACH PROTECTED</span>`;
+          ? `<span class="px-2 py-0.5 rounded text-[10px] font-black mono bg-[#fef3c7] text-[#92400e] border border-[#fcd34d]">⚠️ CONFLICT DETECTED</span>`
+          : `<span class="px-2 py-0.5 rounded text-[10px] font-black mono bg-[#dcfce7] text-[#15803d] border border-[#86efac]">🛡️ KAVACH PROTECTED</span>`;
 
         return `
-        <div onclick="selectTrainForHUD('${t.id}')" class="p-3.5 rounded-xl border ${cardBorder} transition cursor-pointer flex flex-col justify-between shadow-lg">
+        <div onclick="selectTrainForHUD('${t.id}')" class="p-3.5 rounded-xl border ${cardBorder} transition cursor-pointer flex flex-col justify-between shadow-sm">
           
           <!-- Top Row: Train Identity & Precedence -->
           <div>
-            <div class="flex items-start justify-between gap-2 pb-2 mb-2 border-b border-slate-800/80">
+            <div class="flex items-start justify-between gap-2 pb-2 mb-2 border-b border-[#ded3c5]">
               <div class="flex items-center gap-2">
                 <span class="w-3 h-3 rounded-full shrink-0" style="background:${t.color}"></span>
                 <div>
-                  <div class="font-black text-sm text-white mono flex items-center gap-1.5">
+                  <div class="font-black text-sm text-[#1e150f] mono flex items-center gap-1.5">
                     <span>Train ${t.id}</span>
-                    <span class="text-xs text-slate-300 font-normal">(${t.name})</span>
+                    <span class="text-xs text-[#6b5443] font-normal">(${t.name})</span>
                   </div>
                   <div class="flex items-center gap-1.5 mt-0.5">
                     <span class="text-[9px] px-1.5 py-0.2 rounded font-bold mono ${tierBadgeClass(t.tier)}">${tierLabel(t.tier)}</span>
-                    <span class="text-[10px] text-slate-400 mono font-semibold">Priority #${t.priority_rank || 1}</span>
+                    <span class="text-[10px] text-[#6b5443] mono font-semibold">Priority #${t.priority_rank || 1}</span>
                   </div>
                 </div>
               </div>
               <div class="text-right">
-                <span class="text-xs font-black mono text-cyan-400">${distKm} km</span>
-                <div class="text-[9px] text-slate-500 mono">${t.corridor_dir || "N"} Corridor</div>
+                <span class="text-xs font-black mono text-[#854d0e]">${distKm} km</span>
+                <div class="text-[9px] text-[#8c7664] mono">${t.corridor_dir || "N"} Corridor</div>
               </div>
             </div>
 
             <!-- Central Big Speed Command Badge -->
-            <div class="p-2.5 rounded-lg bg-slate-900 border border-slate-800 mb-2.5">
+            <div class="p-2.5 rounded-lg bg-white border border-[#ded3c5] mb-2.5 shadow-sm">
               <div class="flex items-center justify-between">
-                <span class="text-[10px] uppercase mono font-black text-slate-400">⚡ Operational Speed Directive</span>
-                <span class="text-xs font-black mono" style="color:${t.delay_color || '#3b82f6'}">${(t.advised_speed || 0).toFixed(0)} km/h</span>
+                <span class="text-[10px] uppercase mono font-black text-[#6b5443]">⚡ Operational Speed Directive</span>
+                <span class="text-xs font-black mono text-[#854d0e]">${(t.advised_speed || 0).toFixed(0)} km/h</span>
               </div>
-              <div class="text-xs font-black mono text-cyan-300 mt-1">${speedCmd}</div>
-              <div class="text-[11px] text-slate-300 mt-1 leading-snug">${speedDetail}</div>
+              <div class="text-xs font-black mono text-[#1e150f] mt-1">${speedCmd}</div>
+              <div class="text-[11px] text-[#4a3b30] mt-1 leading-snug">${speedDetail}</div>
             </div>
 
             <!-- Signal & Crossing Directives -->
             <div class="grid grid-cols-2 gap-2 text-[11px] mono mb-2">
-              <div class="p-2 rounded bg-slate-900/60 border border-slate-800/80">
-                <div class="text-[9px] text-slate-400 uppercase font-bold">Signal Directive</div>
+              <div class="p-2 rounded bg-white border border-[#ded3c5] shadow-sm">
+                <div class="text-[9px] text-[#6b5443] uppercase font-bold">Signal Directive</div>
                 <div class="flex items-center gap-1.5 mt-1">
                   <span class="w-2.5 h-2.5 rounded-full ${signalClass(t.signal_aspect)}"></span>
-                  <span class="font-black text-white">${t.signal_aspect || "CLEAR"}</span>
+                  <span class="font-black text-[#1e150f]">${t.signal_aspect || "CLEAR"}</span>
                 </div>
-                <div class="text-[10px] text-slate-400 truncate mt-0.5">${(t.signal_km_from_station || 0).toFixed(1)}km to Signal</div>
+                <div class="text-[10px] text-[#8c7664] truncate mt-0.5">${(t.signal_km_from_station || 0).toFixed(1)}km to Signal</div>
               </div>
 
-              <div class="p-2 rounded bg-slate-900/60 border border-slate-800/80">
-                <div class="text-[9px] text-slate-400 uppercase font-bold">Platform Berth</div>
-                <div class="font-black text-cyan-400 text-xs mt-1">Platform ${t.allocated_pf || 1}</div>
-                <div class="text-[10px] text-slate-400 truncate mt-0.5">ETA: ${t.predicted_arrival_str || t.dynamic_eta || "--:--"}</div>
+              <div class="p-2 rounded bg-white border border-[#ded3c5] shadow-sm">
+                <div class="text-[9px] text-[#6b5443] uppercase font-bold">Platform Berth</div>
+                <div class="font-black text-[#854d0e] text-xs mt-1">Platform ${t.allocated_pf || 1}</div>
+                <div class="text-[10px] text-[#8c7664] truncate mt-0.5">ETA: ${t.predicted_arrival_str || t.dynamic_eta || "--:--"}</div>
               </div>
             </div>
 
             <!-- Precedence & Crossing Action -->
-            <div class="p-2 rounded bg-slate-900/40 border border-slate-800 text-[10px] mono text-slate-300">
-              <span class="text-slate-500 font-bold">Crossing:</span> ${crossingText}
+            <div class="p-2 rounded bg-white border border-[#ded3c5] text-[10px] mono text-[#4a3b30] shadow-sm">
+              <span class="text-[#6b5443] font-bold">Crossing:</span> ${crossingText}
             </div>
           </div>
 
           <!-- Bottom Row: Safety Interlock Badge & MAS Trigger -->
-          <div class="pt-2 mt-2 border-t border-slate-800/80 flex items-center justify-between gap-2 flex-wrap">
+          <div class="pt-2 mt-2 border-t border-[#ded3c5] flex items-center justify-between gap-2 flex-wrap">
             <div class="flex items-center gap-2">
               ${riskBadge}
-              <button onclick="event.stopPropagation(); triggerAgentHandoff('${t.id}')" class="px-2 py-0.5 rounded text-[10px] font-bold mono bg-indigo-900/80 hover:bg-indigo-700 text-indigo-200 border border-indigo-600 transition">
+              <button onclick="event.stopPropagation(); triggerAgentHandoff('${t.id}')" class="px-2 py-0.5 rounded text-[10px] font-bold mono bg-[#854d0e] hover:bg-[#a16207] text-white transition">
                 ⚡ ➔ Handoff
               </button>
             </div>
-            <span class="text-[10px] mono text-slate-400">Delay: ${delayBadge(t.delay_min || 0, t.delay_color || '#6b7280')}</span>
+            <span class="text-[10px] mono text-[#6b5443]">Delay: ${delayBadge(t.delay_min || 0, t.delay_color || '#6b5443')}</span>
           </div>
 
         </div>`;
@@ -1419,7 +1401,7 @@ function renderDashboard(data) {
         const hNo = document.getElementById("hudTrainNo");
         if (hNo) hNo.innerText = `${selTrain.id} (${selTrain.name.substring(0,14)})`;
         const hCur = document.getElementById("hudCurSpeed");
-        if (hCur) hCur.innerHTML = `${(selTrain.current_speed||0).toFixed(0)} <span class="text-xs text-slate-400 font-normal">km/h</span>`;
+        if (hCur) hCur.innerHTML = `${(selTrain.current_speed||0).toFixed(0)} <span class="text-xs text-[#8c7664] font-normal">km/h</span>`;
         const hAdv = document.getElementById("hudAdvSpeed");
         if (hAdv) hAdv.innerText = `${(selTrain.advised_speed||selTrain.mps).toFixed(0)} km/h`;
         const hBall = document.getElementById("hudSignalBall");
@@ -1427,7 +1409,7 @@ function renderDashboard(data) {
         const hSigT = document.getElementById("hudSignalText");
         if (hSigT) {
           hSigT.innerText = selTrain.signal_aspect || "CLEAR";
-          hSigT.style.color = selTrain.signal_color || "#22c55e";
+          hSigT.style.color = selTrain.signal_color || "#16a34a";
         }
         const hDst = document.getElementById("hudDist");
         if (hDst) hDst.innerText = `${((selTrain.dist_remaining||0)/1000).toFixed(2)} km`;
@@ -1443,34 +1425,34 @@ function renderDashboard(data) {
   const tbody = document.getElementById("boardBody");
   if (tbody) {
     if (!data.trains || data.trains.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="12" class="py-6 text-center text-slate-600 mono">No trains loaded.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="12" class="py-6 text-center text-[#8c7664] mono">No trains loaded.</td></tr>`;
     } else {
       const sorted = [...data.trains].sort((a, b) =>
         (a.priority_rank || 99) - (b.priority_rank || 99) || a.tier - b.tier
       );
       tbody.innerHTML = sorted.map(t => `
-        <tr onclick="selectTrainForHUD('${t.id}')" class="border-b border-slate-800/40 hover:bg-slate-800/30 cursor-pointer transition">
-          <td class="py-2 pr-2 mono text-slate-400 font-black">${t.priority_rank || "—"}</td>
+        <tr onclick="selectTrainForHUD('${t.id}')" class="border-b border-[#ded3c5] hover:bg-[#ede4d8] cursor-pointer transition">
+          <td class="py-2 pr-2 mono text-[#6b5443] font-black">${t.priority_rank || "—"}</td>
           <td class="pr-3">
             <div class="flex items-center gap-1.5">
               <span class="w-2 h-2 rounded-full shrink-0" style="background:${t.color}"></span>
               <div>
-                <div class="font-black text-white text-xs">${t.id}</div>
-                <div class="text-[10px] text-slate-400 truncate max-w-28">${(t.name||"").substring(0,18)}</div>
+                <div class="font-black text-[#1e150f] text-xs">${t.id}</div>
+                <div class="text-[10px] text-[#6b5443] truncate max-w-28">${(t.name||"").substring(0,18)}</div>
               </div>
             </div>
           </td>
-          <td class="pr-2 text-[10px] mono text-slate-400">${t.corridor_dir||"?"}</td>
-          <td class="pr-2 mono text-[10px] text-slate-300">${t.scheduled_arrival_str||"--:--"}</td>
-          <td class="pr-2 mono text-[10px] text-cyan-300">${t.predicted_arrival_str||t.dynamic_eta||"--:--"}</td>
-          <td class="pr-2">${delayBadge(t.delay_min || 0, t.delay_color || "#6b7280")}</td>
-          <td class="pr-3 mono font-black" style="color:${t.delay_color || '#3b82f6'}">${(t.advised_speed||0).toFixed(0)} km/h</td>
+          <td class="pr-2 text-[10px] mono text-[#6b5443]">${t.corridor_dir||"?"}</td>
+          <td class="pr-2 mono text-[10px] text-[#4a3b30]">${t.scheduled_arrival_str||"--:--"}</td>
+          <td class="pr-2 mono text-[10px] text-[#854d0e] font-bold">${t.predicted_arrival_str||t.dynamic_eta||"--:--"}</td>
+          <td class="pr-2">${delayBadge(t.delay_min || 0, t.delay_color || "#6b5443")}</td>
+          <td class="pr-3 mono font-black text-[#854d0e]">${(t.advised_speed||0).toFixed(0)} km/h</td>
           <td class="pr-2 mono text-[10px]"><span class="inline-block w-2 h-2 rounded-full mr-1 ${signalClass(t.signal_aspect)}"></span>${t.signal_aspect||"?"}</td>
-          <td class="pr-2 mono font-black text-cyan-400 text-[10px]">PF ${t.allocated_pf||1}</td>
-          <td class="pr-2 mono text-[10px] text-slate-400">${((t.dist_remaining||0)/1000).toFixed(1)}km</td>
-          <td class="mono text-[10px] text-emerald-400 pr-2">${t.risk_status === 'NOMINAL_CLEAR' ? 'PROTECTED' : t.risk_status}</td>
+          <td class="pr-2 mono font-black text-[#854d0e] text-[10px]">PF ${t.allocated_pf||1}</td>
+          <td class="pr-2 mono text-[10px] text-[#6b5443]">${((t.dist_remaining||0)/1000).toFixed(1)}km</td>
+          <td class="mono text-[10px] text-[#15803d] font-bold pr-2">${t.risk_status === 'NOMINAL_CLEAR' ? 'PROTECTED' : t.risk_status}</td>
           <td>
-            <button onclick="event.stopPropagation(); triggerAgentHandoff('${t.id}')" class="px-2 py-0.5 rounded text-[9px] font-bold mono bg-indigo-900/80 hover:bg-indigo-700 text-indigo-300 border border-indigo-600 transition">
+            <button onclick="event.stopPropagation(); triggerAgentHandoff('${t.id}')" class="px-2 py-0.5 rounded text-[9px] font-bold mono bg-[#854d0e] hover:bg-[#a16207] text-white transition">
               ⚡ ➔ Handoff
             </button>
           </td>
@@ -1482,14 +1464,15 @@ function renderDashboard(data) {
   // ── Section Controller Diary Log ──
   const aLog = document.getElementById("agentLog");
   if (aLog) {
-    aLog.innerHTML = (data.logs || []).map(l => `<div class="leading-snug">${l}</div>`).join("");
+    aLog.innerHTML = (data.logs || []).map(l => `<div class="leading-snug text-[#2d231a]">${l}</div>`).join("");
   }
 
-  // ── DYNAMIC SVG TRACK & PLATFORM VISUALIZER ──
+  // ── DYNAMIC SVG TRACK & INTERLOCKING VISUALIZER ──
   const nPf = data.station_platforms || 6;
-  const pfSpacing = nPf <= 8 ? 26 : (nPf <= 14 ? 18 : 14);
-  const pfStartY = 60;
+  const pfSpacing = nPf <= 6 ? 30 : (nPf <= 10 ? 22 : 16);
+  const pfStartY = 50;
   const totalSvgHeight = Math.max(260, pfStartY + nPf * pfSpacing + 40);
+  const midY = pfStartY + ((nPf - 1) * pfSpacing) / 2;
 
   const trackSvg = document.getElementById("trackSvg");
   if (trackSvg) {
@@ -1498,20 +1481,60 @@ function renderDashboard(data) {
 
   const pfLines = document.getElementById("platformLines");
   if (pfLines) {
-    let pfHtml = "";
+    let svgHtml = `
+      <!-- Approach Corridors -->
+      <line x1="20" y1="${pfStartY + 5}" x2="160" y2="${midY - 25}" stroke="#8c7664" stroke-width="3.5"/>
+      <text x="15" y="${pfStartY - 6}" fill="#6b5443" font-size="9" class="mono font-bold">NORTH (UP)</text>
+      <circle cx="150" cy="${midY - 26}" r="4" fill="#16a34a" id="sig_N"/>
+
+      <line x1="20" y1="${totalSvgHeight - 35}" x2="160" y2="${midY + 25}" stroke="#8c7664" stroke-width="3.5"/>
+      <text x="15" y="${totalSvgHeight - 20}" fill="#6b5443" font-size="9" class="mono font-bold">SOUTH (DN)</text>
+      <circle cx="150" cy="${midY + 26}" r="4" fill="#16a34a" id="sig_S"/>
+
+      <line x1="20" y1="${midY - 15}" x2="160" y2="${midY - 8}" stroke="#a89582" stroke-width="2" stroke-dasharray="4"/>
+      <text x="15" y="${midY - 18}" fill="#8c7664" font-size="8" class="mono">EAST BR.</text>
+
+      <line x1="20" y1="${midY + 15}" x2="160" y2="${midY + 8}" stroke="#a89582" stroke-width="2" stroke-dasharray="4"/>
+      <text x="15" y="${midY + 25}" fill="#8c7664" font-size="8" class="mono">WEST BR.</text>
+
+      <!-- Central Interlocking Throat Boundary -->
+      <line x1="160" y1="${midY - 35}" x2="160" y2="${midY + 35}" stroke="#cbb8a6" stroke-width="1.5" stroke-dasharray="3"/>
+      <text x="165" y="${midY - 38}" fill="#786150" font-size="7.5" class="mono font-bold">INTERLOCKING THROAT</text>
+    `;
+
+    // Draw Turnout Switch Lines from Throat into Every Platform
     for (let p = 1; p <= nPf; p++) {
       const y = pfStartY + (p - 1) * pfSpacing;
       const isClosed = data.disruption_active && (p === 1);
-      const strokeColor = isClosed ? "#ef4444" : "#334155";
-      const textColor = isClosed ? "#ef4444" : "#94a3b8";
+      const strokeColor = isClosed ? "#dc2626" : "#8c7664";
+      const textColor = isClosed ? "#dc2626" : "#4a3b30";
       const label = isClosed ? `PF ${p} [CLOSED]` : `PF ${p}`;
       const strokeDash = isClosed ? 'stroke-dasharray="4"' : "";
-      pfHtml += `
-        <line x1="260" y1="${y}" x2="620" y2="${y}" stroke="${strokeColor}" stroke-width="2.5" ${strokeDash}/>
-        <text x="628" y="${y + 3}" fill="${textColor}" font-size="${nPf > 12 ? 8 : 9}" class="mono font-bold">${label}</text>
+
+      // Inbound Turnout from Throat (x: 160 -> 250)
+      const throatY = (p <= nPf / 2) ? (midY - 25) : (midY + 25);
+      svgHtml += `
+        <!-- Inbound Switch Turnout -->
+        <line x1="160" y1="${throatY}" x2="250" y2="${y}" stroke="${isClosed ? '#fca5a5' : '#cbb8a6'}" stroke-width="1.8"/>
+
+        <!-- Platform Main Track -->
+        <line x1="250" y1="${y}" x2="620" y2="${y}" stroke="${strokeColor}" stroke-width="2.8" ${strokeDash}/>
+        <circle cx="255" cy="${y}" r="2.5" fill="${isClosed ? '#dc2626' : '#16a34a'}"/>
+        <text x="628" y="${y + 3}" fill="${textColor}" font-size="${nPf > 10 ? 8 : 9}" class="mono font-black">${label}</text>
+
+        <!-- Outbound Departure Turnout (x: 620 -> 720) -->
+        <line x1="620" y1="${y}" x2="720" y2="${midY}" stroke="#cbb8a6" stroke-width="1.8"/>
       `;
     }
-    pfLines.innerHTML = pfHtml;
+
+    // Departure Trunk Line
+    svgHtml += `
+      <line x1="720" y1="${midY}" x2="860" y2="${midY}" stroke="#8c7664" stroke-width="3.5"/>
+      <text x="735" y="${midY - 8}" fill="#6b5443" font-size="9" class="mono font-bold">DEPARTURE MAIN TRUNK</text>
+      <circle cx="725" cy="${midY}" r="3" fill="#16a34a"/>
+    `;
+
+    pfLines.innerHTML = svgHtml;
   }
 
   const svgContainer = document.getElementById("trainSvgContainer");
@@ -1519,30 +1542,43 @@ function renderDashboard(data) {
     svgContainer.innerHTML = "";
     (data.trains || []).forEach(t => {
       const ratio = Math.max(0, Math.min(1, 1 - (t.dist_remaining / Math.max(t.dist, 1))));
-      let x = 40, y = 130;
-      const midY = totalSvgHeight / 2;
-      const bottomY = pfStartY + (nPf - 1) * pfSpacing;
+      const pf = Math.min(nPf, Math.max(1, t.allocated_pf || 1));
+      const targetPfY = pfStartY + (pf - 1) * pfSpacing;
 
-      if (t.corridor === "NORTH_CORRIDOR") { x = 40 + ratio * 220; y = 50 + ratio * (pfStartY - 50); }
-      else if (t.corridor === "SOUTH_CORRIDOR") { x = 40 + ratio * 220; y = (bottomY + 40) - ratio * 40; }
-      else if (t.corridor === "EAST_BRANCH") { x = 40 + ratio * 220; y = (midY - 20) + ratio * 20; }
-      else { x = 40 + ratio * 220; y = (midY + 20) - ratio * 20; }
+      let initY = midY - 25;
+      if (t.corridor === "SOUTH_CORRIDOR") initY = midY + 25;
+      else if (t.corridor === "EAST_BRANCH") initY = midY - 8;
+      else if (t.corridor === "WEST_BRANCH") initY = midY + 8;
 
-      if (ratio >= 0.90) {
-        x = 260 + (ratio - 0.90) / 0.10 * 350;
-        const pf = Math.min(nPf, Math.max(1, t.allocated_pf || 1));
-        y = pfStartY + (pf - 1) * pfSpacing;
+      let x = 30, y = initY;
+
+      if (ratio < 0.50) {
+        // Phase 1: Moving along outer corridor (x: 30 -> 160)
+        const sub = ratio / 0.50;
+        x = 30 + sub * 130;
+        const startCorridorY = t.corridor === "NORTH_CORRIDOR" ? (pfStartY + 5) : (t.corridor === "SOUTH_CORRIDOR" ? (totalSvgHeight - 35) : initY);
+        y = startCorridorY + sub * (initY - startCorridorY);
+      } else if (ratio < 0.80) {
+        // Phase 2: Traversing Interlocking Switch Throat Turnout (x: 160 -> 250)
+        const sub = (ratio - 0.50) / 0.30;
+        x = 160 + sub * 90;
+        y = initY + sub * (targetPfY - initY);
+      } else {
+        // Phase 3: Berthing along Platform Track Line (x: 250 -> 560)
+        const sub = (ratio - 0.80) / 0.20;
+        x = 250 + sub * 310;
+        y = targetPfY;
       }
 
       const hasRisk = t.risk_score > 0.4;
       svgContainer.innerHTML += `
-        <g transform="translate(${x - 20}, ${y - 6})" class="cursor-pointer" onclick="selectTrainForHUD('${t.id}')">
-          ${hasRisk ? `<circle cx="20" cy="6" r="18" fill="${t.color}" opacity="0.3" class="pulse-ring"/>` : ""}
-          <rect x="0"  y="2"  width="8"  height="7" rx="1" fill="#475569"/>
-          <rect x="10" y="2"  width="8"  height="7" rx="1" fill="#64748b"/>
-          <rect x="20" y="1"  width="12" height="9" rx="2" fill="${t.color}" stroke="#fff" stroke-width="0.7"/>
-          <polygon points="32,5 44,1 44,9 32,7" fill="#fef08a" opacity="0.3"/>
-          <text x="0" y="-2" fill="#fff" font-size="7" font-weight="bold" class="mono">${t.id}</text>
+        <g transform="translate(${x - 18}, ${y - 7})" class="cursor-pointer" onclick="selectTrainForHUD('${t.id}')">
+          ${hasRisk ? `<circle cx="18" cy="7" r="18" fill="${t.color}" opacity="0.3" class="pulse-ring"/>` : ""}
+          <rect x="0"  y="2"  width="7"  height="7" rx="1" fill="#78716c"/>
+          <rect x="9"  y="2"  width="7"  height="7" rx="1" fill="#a8a29e"/>
+          <rect x="18" y="1"  width="14" height="9" rx="2" fill="${t.color}" stroke="#ffffff" stroke-width="0.9"/>
+          <polygon points="32,5 44,1 44,9 32,7" fill="#fef08a" opacity="0.6"/>
+          <text x="2" y="-3" fill="#1e150f" font-size="8" font-weight="bold" class="mono">${t.id}</text>
         </g>`;
     });
   }

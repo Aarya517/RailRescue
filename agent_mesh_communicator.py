@@ -124,7 +124,7 @@ class AsyncHttpClient:
 # ─────────────────────────────────────────────────────────────────────────────
 class AgentMeshCommunicator:
     def __init__(self, station_code: str, session: Any, peers: Optional[Dict[str, str]] = None):
-        self.station_code = station_code.upper()
+        self._initial_code = station_code.upper()
         self.session = session
         # Peer network registry: Station Code -> Base URL (e.g. {"AGC": "http://127.0.0.1:8001"})
         self.peers: Dict[str, str] = peers or {
@@ -135,6 +135,10 @@ class AgentMeshCommunicator:
             "CNB":  "http://127.0.0.1:8004",
             "BTE":  "http://127.0.0.1:8005",
             "GUNA": "http://127.0.0.1:8006",
+            "LKO":  "http://127.0.0.1:8007",
+            "HWH":  "http://127.0.0.1:8008",
+            "MAS":  "http://127.0.0.1:8009",
+            "BCT":  "http://127.0.0.1:8010",
         }
         self.active_proposals: Dict[str, HandoffProposal] = {}
         self.handoff_history: List[Dict[str, Any]] = []
@@ -142,28 +146,35 @@ class AgentMeshCommunicator:
         self.last_mesh_directive: Optional[Dict[str, Any]] = None
         self._detection_task: Optional[asyncio.Task] = None
 
+    @property
+    def station_code(self) -> str:
+        if hasattr(self.session, "station_code") and self.session.station_code:
+            return self.session.station_code.upper()
+        return self._initial_code
+
     def register_peer(self, code: str, url: str):
         self.peers[code.upper()] = url.rstrip("/")
         self.session._log(f"MAS: Registered peer Agent-{code.upper()} at {url}")
 
     # ── DIRECTIONAL CORRIDOR ROUTER ──────────────────────────────────────────
-    def get_neighbor_agent_for_corridor(self, corridor_dir: str) -> Optional[str]:
+    def get_neighbor_agent_for_corridor(self, corridor_dir: str) -> str:
         """Maps directional approach/exit corridors to authentic adjacent station agents."""
         corr = (self.session.station_info.get("corridors", {})).get(corridor_dir, {})
         neighbor = corr.get("neighbor")
-        if neighbor and neighbor in self.peers:
-            return neighbor
+        if neighbor and neighbor.upper() != self.station_code:
+            return neighbor.upper()
         
-        # Standard trunk fallback by direction
+        # Standard trunk fallback by direction ensuring neighbor != self.station_code
         if corridor_dir in ("N", "NE"):
-            return "AGC" if self.station_code == "GWL" else ("NDLS" if self.station_code == "AGC" else None)
+            return "AGC" if self.station_code != "AGC" else "NDLS"
         elif corridor_dir in ("S", "SW"):
-            return "JHS" if self.station_code == "GWL" else ("GWL" if self.station_code == "AGC" else None)
+            return "JHS" if self.station_code != "JHS" else "GWL"
         elif corridor_dir in ("E", "SE"):
-            return "BTE" if self.station_code == "GWL" else "CNB"
+            return "BTE" if self.station_code != "BTE" else "CNB"
         elif corridor_dir in ("W", "NW"):
-            return "GUNA" if self.station_code == "GWL" else "ROK"
-        return None
+            return "GUNA" if self.station_code != "GUNA" else "ROK"
+        return "AGC" if self.station_code != "AGC" else "NDLS"
+
 
     # ── DMAPPC CONSENSUS EVALUATION ──────────────────────────────────────────
     def evaluate_incoming_proposal(self, prop: HandoffProposal) -> HandoffResponse:
@@ -325,7 +336,10 @@ class AgentMeshCommunicator:
         if not train:
             return None
 
-        target_agent = force_target or self.get_neighbor_agent_for_corridor(train.get("corridor_dir", "N")) or "AGC"
+        source_station = self.station_code
+        target_agent = force_target or self.get_neighbor_agent_for_corridor(train.get("corridor_dir", "N"))
+        if target_agent == source_station:
+            target_agent = "AGC" if source_station != "AGC" else "NDLS"
         target_url = self.peers.get(target_agent)
         
         telemetry = TrainTelemetryPayload(
@@ -346,7 +360,7 @@ class AgentMeshCommunicator:
 
         proposal = HandoffProposal(
             proposal_id=f"prop_{train_id}_{int(datetime.now().timestamp())}",
-            source_station=self.station_code,
+            source_station=source_station,
             target_station=target_agent,
             corridor_dir=train.get("corridor_dir", "N"),
             timestamp=datetime.now().strftime("%H:%M:%S"),
@@ -355,7 +369,7 @@ class AgentMeshCommunicator:
             requested_platform=train.get("allocated_pf", 1),
         )
 
-        self.session._log(f"MAS PROTOCOL: Transmitting Handoff Proposal for Train {train_id} to Agent-{target_agent}...")
+        self.session._log(f"MAS PROTOCOL: Transmitting Handoff Proposal for Train {train_id} (Agent-{source_station} -> Agent-{target_agent})...")
 
         # If target agent is on live network
         if target_url and target_url != self.peers.get(self.station_code):
@@ -386,7 +400,7 @@ class AgentMeshCommunicator:
                 agreed_slot_sec=prop.requested_slot_sec + 600.0,
                 advised_speed_kmh=0.0,
                 kavach_aspect="DANGER",
-                driver_directive=f"BOUNDARY HOLD: Agent-{target_agent} at 100% capacity. Train {t.train_id} holding at outer signal (0 km/h).",
+                driver_directive=f"BOUNDARY HOLD: Agent-{target_agent} at 100% capacity. Train {t.train_id} holding at outer signal (0 km/h) approaching {target_agent}.",
                 reason=f"Station {target_agent} platforms saturated. Rake held at boundary."
             )
         
@@ -402,7 +416,7 @@ class AgentMeshCommunicator:
             agreed_slot_sec=prop.requested_slot_sec,
             advised_speed_kmh=spd,
             kavach_aspect="CLEAR",
-            driver_directive=f"HANDOFF AGREED: Agent-{target_agent} accepted Train {t.train_id} on PF {pf} at {spd:.0f} km/h.",
+            driver_directive=f"HANDOFF AGREED: Agent-{target_agent} accepted Train {t.train_id} on Platform {pf} at {spd:.0f} km/h (Inbound from Agent-{prop.source_station}).",
             reason="Slot confirmed with 3-minute headway buffer."
         )
 
